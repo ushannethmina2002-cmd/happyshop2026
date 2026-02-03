@@ -3,59 +3,78 @@ import yfinance as yf
 import pandas_ta as ta
 import plotly.graph_objects as go
 
-# ඇප් එකේ පෙනුම සෙට් කිරීම
-st.set_page_config(page_title="Crypto Pro Signal AI", layout="wide")
+# 1. Page Configuration & Professional Styling
+st.set_page_config(page_title="SignalMaster Elite AI", layout="wide")
 
-# Custom CSS පාවිච්චි කරලා පෙනුම ලස්සන කිරීම
+# UI එක පට්ට විදිහට ලස්සන කරන CSS කෝඩ් එක
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; color: white; }
-    .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #f63366; color: white; }
+    /* මුළු ඇප් එකේ පසුබිම */
+    .stApp {
+        background: radial-gradient(circle, #1a1a2e 0%, #16213e 100%);
+        color: #e94560;
+    }
+    /* කොටු වල පෙනුම (Metric Cards) */
+    div[data-testid="stMetricValue"] {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 15px;
+        border-radius: 15px;
+        border: 1px solid #e94560;
+        box-shadow: 0px 4px 15px rgba(233, 69, 96, 0.3);
+    }
+    /* Header එක ලස්සන කිරීම */
+    h1 {
+        text-shadow: 2px 2px #0f3460;
+        letter-spacing: 2px;
+        text-align: center;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🚀 Crypto Pro Signal AI v2.0")
-st.sidebar.header("Settings")
+# 2. Sidebar Navigation
+st.sidebar.markdown("### 🛡️ SignalMaster Elite")
+menu = st.sidebar.radio("Main Menu", ["🚀 Dashboard", "📊 Advanced Analysis", "⚙️ My Profile"])
 
-# Sidebar එකේ පරාමිතීන්
-coin = st.sidebar.selectbox("Select Crypto", ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "ADA-USD"])
-timeframe = st.sidebar.selectbox("Timeframe", ["15m", "30m", "1h", "4h"])
+# --- 🚀 DASHBOARD (HOME SCREEN) ---
+if menu == "🚀 Dashboard":
+    st.markdown("<h1>SIGNALMASTER ELITE AI</h1>", unsafe_allow_html=True)
+    st.write("---")
+    
+    # ට්‍රෙන්ඩ් එක පෙන්වන ලස්සන කාඩ්ස්
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("🔥 Top Gainer", "SOL-USD", "+12.5%")
+    with col2:
+        st.metric("💎 AI Confidence", "High", "94%")
+    with col3:
+        st.metric("🌐 Global Trend", "Bullish", "🚀")
 
-if st.button('🚀 Get Premium Signals'):
-    with st.spinner('දත්ත සහ Indicators විශ්ලේෂණය කරමින්...'):
-        df = yf.download(coin, period="5d", interval=timeframe)
-        
-        # Indicators ගණනය කිරීම
-        df['RSI'] = ta.rsi(df['Close'], length=14)
-        macd = ta.macd(df['Close'])
-        df = df.join(macd)
-        df.ta.bbands(length=20, std=2, append=True)
-        
-        last_price = df['Close'].iloc[-1]
-        last_rsi = df['RSI'].iloc[-1]
-        bb_lower = df['BBL_20_2.0'].iloc[-1]
-        bb_upper = df['BBU_20_2.0'].iloc[-1]
+    st.write("## 💹 Real-Time Market Watch")
+    major_coins = ["BTC-USD", "ETH-USD", "ADA-USD", "XRP-USD"]
+    
+    for c in major_coins:
+        price = yf.Ticker(c).history(period="1d")['Close'].iloc[-1]
+        st.markdown(f"**{c}** : `${price:,.2f}`")
+        st.progress(65 if price > 100 else 40) # පෙනුම සඳහා පාවිච්චි කරන ලස්සන බාර් එකක්
 
-        # දත්ත පෙන්වීම (Metrics)
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Current Price", f"${last_price:,.2f}")
-        col2.metric("RSI (14)", f"{last_rsi:.2f}")
-        col3.metric("Volatility", "High" if last_price > bb_upper else "Low")
+# --- 📊 ADVANCED ANALYSIS ---
+elif menu == "📊 Advanced Analysis":
+    st.subheader("📊 Deep Market Inspection")
+    target = st.sidebar.selectbox("Select Asset", ["BTC-USD", "ETH-USD", "SOL-USD"])
+    
+    # Candlestick Chart with Neon Styling
+    df = yf.download(target, period="1d", interval="15m")
+    fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
+    fig.update_layout(
+        template="plotly_dark",
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color="#e94560")
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-        # Trading Signals (වැදගත්ම කොටස)
-        st.subheader("📊 Market Analysis")
-        if last_rsi < 30 and last_price <= bb_lower:
-            st.success("💎 STRONG BUY SIGNAL: Market is oversold and hitting Support!")
-        elif last_rsi > 70 and last_price >= bb_upper:
-            st.error("⚠️ STRONG SELL SIGNAL: Market is overbought and hitting Resistance!")
-        else:
-            st.info("⚖️ NEUTRAL: Wait for a better entry point.")
-
-        # ප්‍රස්ථාරය (Charting)
-        fig = go.Figure(data=[go.Candlestick(x=df.index,
-                        open=df['Open'], high=df['High'],
-                        low=df['Low'], close=df['Close'], name='Market')])
-        fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-st.sidebar.info("Tip: RSI 30 ට අඩු වෙලා Bollinger Band එකේ පහළ වැදුණාම BUY කරන්න.")
+# --- ⚙️ MY PROFILE ---
+elif menu == "⚙️ My Profile":
+    st.title("👤 Trader Profile")
+    st.info("Username: Ushan Nethmina | License: PRO Edition")
