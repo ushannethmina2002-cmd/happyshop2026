@@ -1,74 +1,203 @@
-import streamlit as st
-import yfinance as yf
-import pandas_ta as ta
-import plotly.graph_objects as go
-import requests
-import pandas as pd
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-# --- CONFIGURATION ---
-BOT_TOKEN = "8526792641:AAHEyboZTc9-lporhmcAGekEVO-Z-D-pvb8"
+// --- MAIN APP START ---
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(); // Firebase සම්බන්ධ කිරීම
+  runApp(CryptoSignalApp());
+}
 
-# 1. Page Styling (High-End Cyberpunk UI)
-st.set_page_config(page_title="SignalMaster AI Pro", layout="wide")
-st.markdown("""
-    <style>
-    .stApp { background: #000000; color: #00dfff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    .signal-box { background: rgba(0, 223, 255, 0.1); border-radius: 15px; padding: 20px; border: 1px solid #00dfff; margin-bottom: 10px; }
-    .stButton>button { width: 100%; background-color: #00dfff; color: black; font-weight: bold; border-radius: 10px; }
-    </style>
-    """, unsafe_allow_html=True)
+class CryptoSignalApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark().copyWith(
+        primaryColor: Colors.orangeAccent,
+        scaffoldBackgroundColor: Color(0xFF0D0D0D), // Premium Dark Background
+      ),
+      home: LoginPage(),
+    );
+  }
+}
 
-# 2. Sidebar
-st.sidebar.title("🚀 MASTER CONTROL")
-menu = st.sidebar.radio("SELECT MODULE", ["🏠 Neural Home", "📡 Live Signals", "📊 Market Insight"])
+// --- 1. LOGIN PAGE (Admin Credentials) ---
+class LoginPage extends StatefulWidget {
+  @override
+  _LoginPageState createState() => _LoginPageState();
+}
 
-# --- FUNCTION: Get Telegram Messages ---
-def get_telegram_updates():
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
-    try:
-        response = requests.get(url).json()
-        if response["ok"]:
-            # අන්තිම මැසේජ් 5 අරගන්නවා
-            messages = [item["message"]["text"] for item in response["result"] if "message" in item and "text" in item]
-            return messages[::-1] # අලුත්ම ඒවා උඩට
-    except:
-        return []
+class _LoginPageState extends State<LoginPage> {
+  final _email = TextEditingController();
+  final _pass = TextEditingController();
 
-# --- 🏠 NEURAL HOME ---
-if menu == "🏠 Neural Home":
-    st.markdown("<h1 style='text-align: center;'>SIGNALMASTER AI v8.0</h1>", unsafe_allow_html=True)
-    
-    # Real-time Multi-Coin Ticker
-    coins = ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"]
-    cols = st.columns(len(coins))
-    for i, coin in enumerate(coins):
-        price = yf.Ticker(coin).history(period="1d")['Close'].iloc[-1]
-        cols[i].metric(coin, f"${price:,.2f}")
+  void handleLogin() {
+    if (_email.text == "ushan2008@gmail.com" && _pass.text == "2008") {
+      Navigator.push(context, MaterialPageRoute(builder: (context) => AdminDashboard()));
+    } else {
+      Navigator.push(context, MaterialPageRoute(builder: (context) => UserDashboard()));
+    }
+  }
 
-    st.write("---")
-    st.subheader("🤖 AI Market Sentiment")
-    st.progress(85) # AI Bullish index
-    st.caption("AI Analysis: Strong Bullish Momentum Detected in Major Pairs.")
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(30),
+          child: Column(
+            children: [
+              Icon(Icons.bolt, size: 100, color: Colors.orangeAccent),
+              Text("CRYPTO PRO SIGNALS", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+              SizedBox(height: 40),
+              TextField(controller: _email, decoration: InputDecoration(labelText: "Email", border: OutlineInputBorder())),
+              SizedBox(height: 15),
+              TextField(controller: _pass, obscureText: true, decoration: InputDecoration(labelText: "Password", border: OutlineInputBorder())),
+              SizedBox(height: 25),
+              ElevatedButton(
+                onPressed: handleLogin,
+                child: Text("SIGN IN"),
+                style: ElevatedButton.styleFrom(minimumSize: Size(double.infinity, 55), backgroundColor: Colors.orangeAccent),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-# --- 📡 LIVE SIGNALS (REAL TELEGRAM FEED) ---
-elif menu == "📡 Live Signals":
-    st.subheader("📡 Real-Time Telegram Signal Feed")
-    st.write("Listening to Telegram Bot...")
-    
-    msgs = get_telegram_updates()
-    
-    if msgs:
-        for msg in msgs:
-            st.markdown(f"<div class='signal-box'><b>📡 New Signal Received:</b><br>{msg}</div>", unsafe_allow_html=True)
-    else:
-        st.warning("No new signals found. Make sure you have sent messages to the bot or added the bot to a channel.")
-        st.info("💡 Tip: Send a message to your bot in Telegram, then refresh this page!")
+// --- 2. ADMIN DASHBOARD (Post & Pin Signals) ---
+class AdminDashboard extends StatelessWidget {
+  final _pair = TextEditingController();
+  final _entry = TextEditingController();
+  final _tp = TextEditingController();
+  final _sl = TextEditingController();
 
-# --- 📊 MARKET INSIGHT ---
-elif menu == "📊 Market Insight":
-    target = st.sidebar.selectbox("Asset", ["BTC-USD", "ETH-USD", "SOL-USD"])
-    df = yf.download(target, period="1d", interval="15m")
-    
-    fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
-    fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False)
-    st.plotly_chart(fig, use_container_width=True)
+  void postSignal(BuildContext context) {
+    FirebaseFirestore.instance.collection('signals').add({
+      'pair': _pair.text.toUpperCase(),
+      'entry': _entry.text,
+      'tp': _tp.text,
+      'sl': _sl.text,
+      'status': 'ACTIVE',
+      'isPinned': false,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Signal Posted Successfully!")));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("Admin Control Panel")),
+      body: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(controller: _pair, decoration: InputDecoration(labelText: "Pair (e.g. SOL/USDT)")),
+            TextField(controller: _entry, decoration: InputDecoration(labelText: "Entry Price Range")),
+            TextField(controller: _tp, decoration: InputDecoration(labelText: "Take Profit Target")),
+            TextField(controller: _sl, decoration: InputDecoration(labelText: "Stop Loss")),
+            SizedBox(height: 20),
+            ElevatedButton(onPressed: () => postSignal(context), child: Text("🚀 BROADCAST SIGNAL")),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- 3. USER DASHBOARD (Tabs: Signals, Risk Calc, Bubbles) ---
+class UserDashboard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text("Member Area"),
+          bottom: TabBar(
+            indicatorColor: Colors.orangeAccent,
+            tabs: [Tab(text: "Signals"), Tab(text: "Risk Calc"), Tab(text: "Market")],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            SignalListTab(),
+            RiskCalcTab(),
+            Center(child: Text("Crypto Bubbles - Coming Soon (WebView)")),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- 4. SIGNAL LIST TAB (Live from Firebase) ---
+class SignalListTab extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder(
+      stream: FirebaseFirestore.instance.collection('signals').orderBy('timestamp', descending: true).snapshots(),
+      builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
+        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
+        return ListView(
+          padding: EdgeInsets.all(10),
+          children: snapshot.data!.docs.map((doc) {
+            return Card(
+              color: Color(0xFF1A1A1A),
+              child: ListTile(
+                leading: Icon(Icons.trending_up, color: Colors.greenAccent),
+                title: Text("${doc['pair']}", style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text("Entry: ${doc['entry']}\nTP: ${doc['tp']} | SL: ${doc['sl']}"),
+                trailing: Text("${doc['status']}", style: TextStyle(color: Colors.orangeAccent)),
+                isThreeLine: true,
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+}
+
+// --- 5. RISK CALCULATOR TAB ---
+class RiskCalcTab extends StatefulWidget {
+  @override
+  _RiskCalcTabState createState() => _RiskCalcTabState();
+}
+
+class _RiskCalcTabState extends State<RiskCalcTab> {
+  final _balance = TextEditingController();
+  final _riskPercent = TextEditingController();
+  String result = "Enter values to calculate";
+
+  void calculate() {
+    double bal = double.tryParse(_balance.text) ?? 0;
+    double risk = double.tryParse(_riskPercent.text) ?? 0;
+    double finalRisk = bal * (risk / 100);
+    setState(() {
+      result = "You should only risk: \$$finalRisk";
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.all(20),
+      child: Column(
+        children: [
+          TextField(controller: _balance, decoration: InputDecoration(labelText: "Wallet Balance ($)"), keyboardType: TextInputType.number),
+          TextField(controller: _riskPercent, decoration: InputDecoration(labelText: "Risk % (e.g. 2)"), keyboardType: TextInputType.number),
+          SizedBox(height: 20),
+          ElevatedButton(onPressed: calculate, child: Text("Calculate Risk Amount")),
+          SizedBox(height: 30),
+          Text(result, style: TextStyle(fontSize: 18, color: Colors.greenAccent)),
+        ],
+      ),
+    );
+  }
+}
