@@ -3,3 +3,8 @@ yfinance
 pandas_ta
 plotly
 requests
+streamlit
+pandas
+requests
+streamlit-gsheets
+plotly
