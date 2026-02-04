@@ -2,17 +2,17 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# පිටුවේ සැකසුම් (Page Config)
+# පිටුවේ පෙනුම සැකසීම
 st.set_page_config(page_title="Crypto Signals Pro", layout="centered")
 
-# --- සරල දත්ත ගබඩාවක් (දැනට පාවිච්චි කිරීමට) ---
+# දත්ත තාවකාලිකව තබා ගැනීමට (Database එකක් නැති නිසා)
 if 'signals' not in st.session_state:
     st.session_state.signals = []
 
-# --- LOGIN පද්ධතිය ---
-def login():
+# --- 1. LOGIN පද්ධතිය ---
+def login_page():
     st.title("🚀 Crypto Signals Login")
-    email = st.text_input("Email")
+    email = st.text_input("Email (Admin: ushan2008@gmail.com)")
     password = st.text_input("Password", type="password")
     
     if st.button("Login"):
@@ -25,71 +25,70 @@ def login():
             st.session_state.is_admin = False
             st.rerun()
         else:
-            st.error("කරුණාකර විස්තර ඇතුළත් කරන්න")
+            st.error("කරුණාකර නිවැරදි විස්තර ඇතුළත් කරන්න")
 
-# --- ADMIN PANEL ---
+# --- 2. ADMIN PANEL (සිග්නල් පෝස්ට් කිරීමට) ---
 def admin_panel():
     st.header("⚡ Admin Control Panel")
-    with st.form("signal_form"):
-        pair = st.text_input("Coin Pair (e.g., BTC/USDT)")
-        type = st.selectbox("Type", ["LONG", "SHORT"])
+    with st.form("post_signal"):
+        pair = st.text_input("Coin Pair (උදා: BTC/USDT)")
+        trade_type = st.selectbox("Type", ["LONG", "SHORT"])
         entry = st.text_input("Entry Zone")
-        tp = st.text_input("Take Profit")
+        tp = st.text_input("Take Profit Target")
         sl = st.text_input("Stop Loss")
         
-        if st.form_submit_button("Post Signal"):
-            new_signal = {
+        if st.form_submit_button("🚀 Broadcast Signal"):
+            new_sig = {
                 "pair": pair.upper(),
-                "type": type,
+                "type": trade_type,
                 "entry": entry,
                 "tp": tp,
                 "sl": sl,
-                "time": datetime.now().strftime("%H:%M:%S")
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M")
             }
-            st.session_state.signals.insert(0, new_signal)
-            st.success(f"{pair} Signal එක සාර්ථකව පල කරා!")
+            st.session_state.signals.insert(0, new_sig)
+            st.success(f"{pair} Signal එක පල කරා!")
 
-# --- USER DASHBOARD ---
+# --- 3. USER SIGNALS (සිග්නල් පෙන්වන තැන) ---
 def user_dashboard():
-    st.title("📈 Active Signals")
-    
+    st.title("📈 Active Crypto Signals")
     if not st.session_state.signals:
-        st.info("දැනට සක්‍රීය සිග්නල් කිසිවක් නැත.")
+        st.info("දැනට සක්‍රීය සිග්නල් නැත. Admin පණිවිඩයක් එවන තෙක් රැඳී සිටින්න.")
     else:
-        for sig in st.session_state.signals:
-            with st.container():
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.subheader(f"{sig['pair']} ({sig['type']})")
-                    st.write(f"**Entry:** {sig['entry']} | **TP:** {sig['tp']} | **SL:** {sig['sl']}")
-                with col2:
-                    st.write(f"🕒 {sig['time']}")
-                st.divider()
+        for s in st.session_state.signals:
+            st.markdown(f"""
+            <div style="background-color: #1e1e1e; padding: 20px; border-radius: 10px; border-left: 5px solid orange; margin-bottom: 10px;">
+                <h3 style="color: orange; margin:0;">{s['pair']} - {s['type']}</h3>
+                <p style="margin:5px 0;"><b>Entry:</b> {s['entry']} | <b>TP:</b> {s['tp']} | <b>SL:</b> {s['sl']}</p>
+                <small style="color: gray;">🕒 Posted: {s['time']}</small>
+            </div>
+            """, unsafe_allow_html=True)
 
-# --- RISK CALCULATOR ---
+# --- 4. RISK CALCULATOR ---
 def risk_calculator():
-    st.header("🧮 Risk Management Tool")
-    balance = st.number_input("Wallet Balance ($)", min_value=0.0)
-    risk_percent = st.slider("Risk (%)", 1, 10, 2)
-    
+    st.header("🧮 Position Size Calculator")
+    balance = st.number_input("Wallet Balance ($)", min_value=0.0, step=10.0)
+    risk_p = st.slider("Risk (%)", 1, 10, 2)
     if balance > 0:
-        risk_amount = balance * (risk_percent / 100)
-        st.success(f"ඔබ මේ trade එකට උපරිම වැය කළ යුතු මුදල: **${risk_amount:.2f}**")
+        risk_val = balance * (risk_p / 100)
+        st.info(f"ඔබ මේ ට්‍රේඩ් එකට වැය කළ යුතු උපරිම මුදල: **${risk_val:.2f}**")
 
-# --- ප්‍රධාන පාලනය (Main Control) ---
+# --- MAIN LOGIC ---
 if 'logged_in' not in st.session_state:
-    login()
+    login_page()
 else:
+    # Sidebar Menu
     menu = ["Signals", "Risk Calculator"]
     if st.session_state.is_admin:
         menu.insert(0, "Admin Panel")
-        
-    choice = st.sidebar.radio("Menu", menu)
+    
+    choice = st.sidebar.radio("Navigation", menu)
     
     if st.sidebar.button("Logout"):
-        del st.session_state.logged_in
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
         st.rerun()
-
+        
     if choice == "Admin Panel":
         admin_panel()
     elif choice == "Signals":
