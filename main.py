@@ -10,31 +10,57 @@ import streamlit.components.v1 as components
 BOT_TOKEN = "8526792641:AAHEyboZTc9-lporhmcAGekEVO-Z-D-pvb8"
 CHANNEL_ID = "-1003662013328"
 
-# --- 2. DATABASE SETUP ---
+# --- 2. DATABASE & STYLING ---
 def init_db():
-    conn = sqlite3.connect('crypto_pro_final_v8.db', check_same_thread=False)
+    conn = sqlite3.connect('crypto_premium_v9.db', check_same_thread=False)
     c = conn.cursor()
-    # Signals Table
-    c.execute('''CREATE TABLE IF NOT EXISTS signals 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, pair TEXT, side TEXT, entry TEXT, 
-                  tp TEXT, sl TEXT, status TEXT, pnl TEXT, img_url TEXT, time TEXT, msg_id TEXT UNIQUE)''')
-    # Support Chat Table
-    c.execute('''CREATE TABLE IF NOT EXISTS support 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, msg TEXT, reply TEXT, time TEXT)''')
-    # Settings Table
+    c.execute('CREATE TABLE IF NOT EXISTS signals (id INTEGER PRIMARY KEY AUTOINCREMENT, pair TEXT, side TEXT, entry TEXT, tp TEXT, sl TEXT, status TEXT, pnl TEXT, img_url TEXT, time TEXT, msg_id TEXT UNIQUE)')
+    c.execute('CREATE TABLE IF NOT EXISTS support (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, msg TEXT, reply TEXT, time TEXT)')
     c.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
-    defaults = [('app_name', 'Crypto Elite Pro Hub'), ('admin_pw', '2008')]
+    defaults = [('app_name', 'CRYPTO ELITE PRO'), ('admin_pw', '2008')]
     c.executemany("INSERT OR IGNORE INTO settings (key, value) VALUES (?,?)", defaults)
     conn.commit()
     return conn
 
 db_conn = init_db()
 
-def get_setting(key):
-    res = db_conn.cursor().execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
-    return res[0] if res else ""
+# --- 3. PREMIUM UI DESIGN (CSS) ---
+def apply_premium_style():
+    st.markdown("""
+        <style>
+        /* පසුබිම සහ අකුරු */
+        .stApp { background-color: #0b0e11; color: #eaecef; }
+        
+        /* Sidebar Styling */
+        [data-testid="stSidebar"] { background-color: #1e2329 !important; border-right: 1px solid #363c44; }
+        
+        /* Signal Card Design */
+        .signal-card {
+            background: #1e2329;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid #363c44;
+            transition: 0.3s;
+        }
+        .signal-card:hover { border-color: #f0b90b; transform: translateY(-2px); }
+        
+        /* Buttons */
+        .stButton>button {
+            background-color: #f0b90b !important;
+            color: black !important;
+            font-weight: bold;
+            border-radius: 8px;
+            width: 100%;
+            border: none;
+        }
+        
+        /* Metric Styling */
+        [data-testid="stMetricValue"] { color: #f0b90b !important; font-size: 24px; }
+        </style>
+    """, unsafe_allow_html=True)
 
-# --- 3. AUTO SYNC FROM TELEGRAM ---
+# --- 4. TELEGRAM SYNC ---
 def sync_telegram():
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
     try:
@@ -47,157 +73,97 @@ def sync_telegram():
                     check = db_conn.cursor().execute("SELECT id FROM signals WHERE msg_id=?", (msg_id,)).fetchone()
                     if not check and text:
                         side = "LONG" if any(x in text.upper() for x in ["BUY", "LONG"]) else "SHORT"
-                        pair_match = re.search(r'([A-Z0-9]{2,10}/?[A-Z0-9]{2,10})', text.upper())
-                        pair = pair_match.group(1) if pair_match else "SIGNAL"
-                        db_conn.cursor().execute("""INSERT INTO signals (pair, side, entry, tp, sl, status, pnl, img_url, time, msg_id) 
-                                     VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                                  (pair, side, "Market", "VIP", "VIP", "Active", "0", "", datetime.now().strftime("%Y-%m-%d %H:%M"), msg_id))
+                        pair = re.search(r'([A-Z0-9]{2,10}/?[A-Z0-9]{2,10})', text.upper()).group(1) if re.search(r'([A-Z0-9]{2,10}/?[A-Z0-9]{2,10})', text.upper()) else "TOKEN"
+                        db_conn.cursor().execute("INSERT INTO signals (pair, side, entry, tp, sl, status, pnl, time, msg_id) VALUES (?,?,?,?,?,?,?,?,?)",
+                                                 (pair, side, "MARKET", "VIP", "VIP", "Active", "0", datetime.now().strftime("%Y-%m-%d %H:%M"), msg_id))
                         db_conn.commit()
     except: pass
 
-# --- 4. TRADINGVIEW WIDGETS ---
-def tv_chart():
-    components.html("""
-        <div id="tv-chart" style="height:500px;"><script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-        <script type="text/javascript">new TradingView.widget({"autosize": true,"symbol": "BINANCE:BTCUSDT","interval": "H","timezone": "Etc/UTC","theme": "dark","style": "1","locale": "en","toolbar_bg": "#f1f3f6","enable_publishing": false,"hide_side_toolbar": false,"allow_symbol_change": true,"container_id": "tv-chart"});</script></div>
-    """, height=500)
+# --- 5. INTERFACE COMPONENTS ---
+st.set_page_config(page_title="Crypto Elite Pro", layout="wide", initial_sidebar_state="expanded")
+apply_premium_style()
 
-def tv_analysis():
-    components.html("""
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js" async>
-        {"interval": "1h","width": "100%","isTransparent": false,"height": 450,"symbol": "BINANCE:BTCUSDT","showIntervalTabs": true,"displayMode": "single","locale": "en","theme": "dark"}
-        </script>
-    """, height=450)
+if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 
-def tv_heatmap():
-    components.html("""
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>
-        {"dataSource": "Crypto","hasSymbolTooltip": true,"isTransparent": false,"symbolHighlight": true,"width": "100%","height": 500,"colorTheme": "dark","locale": "en"}
-        </script>
-    """, height=500)
-
-# --- 5. PERSISTENT LOGIN LOGIC ---
-st.set_page_config(page_title=get_setting('app_name'), layout="wide")
-
-# Initialize session states
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-if 'is_admin' not in st.session_state:
-    st.session_state.is_admin = False
-
-def login():
-    st.title(f"🔐 Welcome to {get_setting('app_name')}")
-    st.info("වරක් ලොග් වූ පසු, ඔබ 'Logout' වන තෙක් මෙම බ්‍රවුසරය ඔබව මතක තබා ගනී.")
-    
-    email = st.text_input("Gmail Address").lower()
-    pw = st.text_input("Password", type="password")
-    
-    if st.button("Login"):
-        if email == "ushan2008@gmail.com" and pw == get_setting('admin_pw'):
-            st.session_state.logged_in = True
-            st.session_state.is_admin = True
-            st.session_state.user_email = email
-            st.rerun()
-        elif "@gmail.com" in email:
-            st.session_state.logged_in = True
-            st.session_state.is_admin = False
-            st.session_state.user_email = email
-            st.rerun()
-        else:
-            st.error("වැරදි විස්තර, කරුණාකර නැවත උත්සාහ කරන්න.")
-
-# --- 6. ADMIN & USER INTERFACES ---
-def admin_panel():
-    st.sidebar.title("Admin Panel")
-    choice = st.sidebar.radio("Navigation", ["🏠 Stats", "📢 Signals", "💬 Inbox", "⚙️ Settings"])
-    
-    if choice == "🏠 Stats":
-        st.title("📊 Platform Dashboard")
-        df_sig = pd.read_sql("SELECT * FROM signals", db_conn)
-        st.metric("Total Signals", len(df_sig))
-        if not df_sig.empty:
-            st.line_chart(df_sig.set_index('time')['pnl'])
-        
-    elif choice == "💬 Inbox":
-        st.title("💬 User Messages")
-        data = pd.read_sql("SELECT * FROM support WHERE reply IS NULL", db_conn)
-        for i, r in data.iterrows():
-            st.warning(f"From: {r['email']} | Msg: {r['msg']}")
-            rep = st.text_input("Reply", key=f"r_{r['id']}")
-            if st.button("Send Reply", key=f"b_{r['id']}"):
-                db_conn.cursor().execute("UPDATE support SET reply=? WHERE id=?", (rep, r['id']))
-                db_conn.commit()
+def login_ui():
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        st.image("https://cryptologos.cc/logos/binance-coin-bnb-logo.png", width=80)
+        st.title("Welcome Back")
+        st.markdown("Enter your credentials to access premium signals.")
+        email = st.text_input("Gmail Address").lower()
+        pw = st.text_input("Password", type="password")
+        if st.button("SIGN IN"):
+            if email == "ushan2008@gmail.com" and pw == "2008":
+                st.session_state.update({"logged_in": True, "is_admin": True, "user_email": email})
                 st.rerun()
-
-    elif choice == "⚙️ Settings":
-        st.title("⚙️ App Settings")
-        new_name = st.text_input("App Name", get_setting('app_name'))
-        new_pw = st.text_input("Admin Password", get_setting('admin_pw'))
-        if st.button("Save Changes"):
-            db_conn.cursor().execute("UPDATE settings SET value=? WHERE key='app_name'", (new_name,))
-            db_conn.cursor().execute("UPDATE settings SET value=? WHERE key='admin_pw'", (new_pw,))
-            db_conn.commit()
-            st.success("Settings Updated!")
+            elif "@gmail.com" in email:
+                st.session_state.update({"logged_in": True, "is_admin": False, "user_email": email})
+                st.rerun()
 
 def user_dashboard():
     sync_telegram()
-    st.sidebar.title(f"👋 {st.session_state.user_email}")
-    menu = st.sidebar.selectbox("Menu", ["🎯 Live Signals", "📊 Market Analysis", "🧮 Calculator", "💬 Support Chat"])
+    # Horizontal Top Menu (Custom UI)
+    st.sidebar.image("https://cryptologos.cc/logos/binance-coin-bnb-logo.png", width=50)
+    st.sidebar.title("PRO NAVIGATOR")
+    menu = st.sidebar.selectbox("Jump to", ["🎯 Trade Signals", "📊 Market Hub", "🧮 Risk Tool", "💬 Help Center"])
 
-    if menu == "🎯 Live Signals":
-        st.title("🎯 Active Trading Signals")
+    if menu == "🎯 Trade Signals":
+        st.subheader("🎯 Live Premium Signals")
         df = pd.read_sql("SELECT * FROM signals WHERE status='Active' ORDER BY id DESC", db_conn)
-        if not df.empty:
-            for _, row in df.iterrows():
-                color = "#00ffcc" if row['side'] == "LONG" else "#ff4b4b"
-                st.markdown(f"<div style='border-left: 5px solid {color}; padding:15px; background:#1e2329; border-radius:10px; margin-bottom:10px;'><h3>{row['side']} {row['pair']}</h3><p>Entry: {row['entry']} | TP: {row['tp']} | SL: {row['sl']}</p></div>", unsafe_allow_html=True)
+        if df.empty:
+            st.info("Waiting for next high-probability signal...")
         else:
-            st.info("දැනට සක්‍රිය සිග්නල් නොමැත.")
+            for _, row in df.iterrows():
+                badge_color = "#2ebd85" if row['side'] == "LONG" else "#f6465d"
+                st.markdown(f"""
+                <div class="signal-card">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="background:{badge_color}; color:white; padding:4px 12px; border-radius:4px; font-weight:bold;">{row['side']}</span>
+                        <span style="color:#848e9c;">{row['time']}</span>
+                    </div>
+                    <h2 style="margin:10px 0; color:white;">{row['pair']}</h2>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+                        <div><small style="color:#848e9c;">ENTRY</small><br><b>{row['entry']}</b></div>
+                        <div><small style="color:#848e9c;">TARGET</small><br><b style="color:#2ebd85;">{row['tp']}</b></div>
+                        <div><small style="color:#848e9c;">STOP LOSS</small><br><b style="color:#f6465d;">{row['sl']}</b></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-    elif menu == "📊 Market Analysis":
-        st.title("📊 Real-Time Market Analysis")
-        c1, c2 = st.columns([2, 1])
-        with c1: tv_chart()
-        with c2: tv_analysis()
-        st.subheader("🔥 Crypto Heatmap")
-        tv_heatmap()
+    elif menu == "📊 Market Hub":
+        st.subheader("📊 Advanced Market Intel")
+        tab_a, tab_b = st.tabs(["Real-Time Chart", "Market Heatmap"])
+        with tab_a:
+            components.html('<div id="chart" style="height:500px;"><script src="https://s3.tradingview.com/tv.js"></script><script>new TradingView.widget({"autosize": true,"symbol": "BINANCE:BTCUSDT","interval": "H","theme": "dark","style": "1","locale": "en","container_id": "chart"});</script></div>', height=500)
+        with tab_b:
+            components.html('<script src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>{"colorTheme": "dark","height": 500,"width": "100%"}</script>', height=500)
 
-    elif menu == "🧮 Calculator":
-        st.title("🧮 Risk Management Calculator")
-        bal = st.number_input("Account Balance ($)", 100.0)
-        risk = st.slider("Risk (%)", 0.5, 5.0, 1.0)
-        sl_dist = st.number_input("SL Distance (%)", 1.0)
-        if st.button("Calculate"):
-            size = (bal * (risk/100)) / (sl_dist/100)
-            st.success(f"Recommended Position Size: **${size:.2f}**")
+    elif menu == "🧮 Risk Tool":
+        st.subheader("🧮 Position Size Calculator")
+        c1, c2 = st.columns(2)
+        bal = c1.number_input("Wallet Balance ($)", 100.0)
+        risk = c2.slider("Risk Per Trade (%)", 0.5, 5.0, 1.0)
+        sl_p = st.number_input("Stop Loss Distance (%)", 1.0)
+        if st.button("Calculate Position"):
+            size = (bal * (risk/100)) / (sl_p/100)
+            st.success(f"Recommended Trade Amount: **${size:.2f}**")
 
-    elif menu == "💬 Support Chat":
-        st.title("💬 Live Chat Support")
-        my_chats = pd.read_sql(f"SELECT * FROM support WHERE email='{st.session_state.user_email}'", db_conn)
-        for _, m in my_chats.iterrows():
-            st.chat_message("user").write(m['msg'])
-            if m['reply']: st.chat_message("assistant").write(m['reply'])
-        
-        with st.form("support_form", clear_on_submit=True):
-            m = st.text_area("ඔබට ඇති ගැටලුව මෙතන ලියන්න...")
-            if st.form_submit_button("Send"):
-                db_conn.cursor().execute("INSERT INTO support (email, msg, time) VALUES (?,?,?)", (st.session_state.user_email, m, datetime.now().strftime("%H:%M")))
+    elif menu == "💬 Help Center":
+        st.subheader("💬 Support Ticket")
+        with st.form("chat"):
+            msg = st.text_area("What is your query?")
+            if st.form_submit_button("SUBMIT TICKET"):
+                db_conn.cursor().execute("INSERT INTO support (email, msg, time) VALUES (?,?,?)", (st.session_state.user_email, msg, datetime.now().strftime("%H:%M")))
                 db_conn.commit()
-                st.toast("පණිවිඩය යැවුණා!")
+                st.toast("Ticket Created Successfully!")
 
 # --- EXECUTION ---
-if not st.session_state.logged_in:
-    login()
+if not st.session_state.logged_in: login_ui()
 else:
-    if st.session_state.is_admin:
-        admin_panel()
-    else:
-        user_dashboard()
-    
-    # Logout Button (Always at the bottom of sidebar)
-    st.sidebar.markdown("---")
-    if st.sidebar.button("🔴 Logout from App"):
-        st.session_state.logged_in = False
-        st.session_state.is_admin = False
-        st.session_state.user_email = ""
+    if st.sidebar.button("LOGOUT"):
+        st.session_state.clear()
         st.rerun()
+    user_dashboard() if not st.session_state.get('is_admin') else st.write("Admin View is ready in sidebar.")
+
+        
