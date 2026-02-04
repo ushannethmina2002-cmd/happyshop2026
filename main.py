@@ -12,7 +12,7 @@ CHANNEL_ID = "-1003662013328"
 
 # --- 2. DATABASE & STYLING ---
 def init_db():
-    conn = sqlite3.connect('crypto_premium_v9.db', check_same_thread=False)
+    conn = sqlite3.connect('crypto_elite_final.db', check_same_thread=False)
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS signals (id INTEGER PRIMARY KEY AUTOINCREMENT, pair TEXT, side TEXT, entry TEXT, tp TEXT, sl TEXT, status TEXT, pnl TEXT, img_url TEXT, time TEXT, msg_id TEXT UNIQUE)')
     c.execute('CREATE TABLE IF NOT EXISTS support (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, msg TEXT, reply TEXT, time TEXT)')
@@ -24,43 +24,20 @@ def init_db():
 
 db_conn = init_db()
 
-# --- 3. PREMIUM UI DESIGN (CSS) ---
 def apply_premium_style():
     st.markdown("""
         <style>
-        /* පසුබිම සහ අකුරු */
         .stApp { background-color: #0b0e11; color: #eaecef; }
-        
-        /* Sidebar Styling */
         [data-testid="stSidebar"] { background-color: #1e2329 !important; border-right: 1px solid #363c44; }
-        
-        /* Signal Card Design */
-        .signal-card {
-            background: #1e2329;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 15px;
-            border: 1px solid #363c44;
-            transition: 0.3s;
-        }
-        .signal-card:hover { border-color: #f0b90b; transform: translateY(-2px); }
-        
-        /* Buttons */
-        .stButton>button {
-            background-color: #f0b90b !important;
-            color: black !important;
-            font-weight: bold;
-            border-radius: 8px;
-            width: 100%;
-            border: none;
-        }
-        
-        /* Metric Styling */
-        [data-testid="stMetricValue"] { color: #f0b90b !important; font-size: 24px; }
+        .signal-card { background: #1e2329; border-radius: 12px; padding: 20px; margin-bottom: 15px; border: 1px solid #363c44; }
+        .stButton>button { background-color: #f0b90b !important; color: black !important; font-weight: bold; border-radius: 8px; width: 100%; border: none; }
+        .stTabs [data-baseweb="tab-list"] { background-color: transparent; }
+        .stTabs [data-baseweb="tab"] { color: #848e9c; }
+        .stTabs [aria-selected="true"] { color: #f0b90b; border-bottom-color: #f0b90b; }
         </style>
     """, unsafe_allow_html=True)
 
-# --- 4. TELEGRAM SYNC ---
+# --- 3. CORE LOGIC ---
 def sync_telegram():
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
     try:
@@ -79,21 +56,20 @@ def sync_telegram():
                         db_conn.commit()
     except: pass
 
-# --- 5. INTERFACE COMPONENTS ---
-st.set_page_config(page_title="Crypto Elite Pro", layout="wide", initial_sidebar_state="expanded")
+# --- 4. UI COMPONENTS ---
+st.set_page_config(page_title="Crypto Elite Pro", layout="wide")
 apply_premium_style()
 
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 
 def login_ui():
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        st.image("https://cryptologos.cc/logos/binance-coin-bnb-logo.png", width=80)
-        st.title("Welcome Back")
-        st.markdown("Enter your credentials to access premium signals.")
-        email = st.text_input("Gmail Address").lower()
+    _, col, _ = st.columns([1,1.5,1])
+    with col:
+        st.image("https://cryptologos.cc/logos/binance-coin-bnb-logo.png", width=70)
+        st.title("Elite Login")
+        email = st.text_input("Email").lower()
         pw = st.text_input("Password", type="password")
-        if st.button("SIGN IN"):
+        if st.button("LOG IN"):
             if email == "ushan2008@gmail.com" and pw == "2008":
                 st.session_state.update({"logged_in": True, "is_admin": True, "user_email": email})
                 st.rerun()
@@ -101,62 +77,75 @@ def login_ui():
                 st.session_state.update({"logged_in": True, "is_admin": False, "user_email": email})
                 st.rerun()
 
+# --- 5. ADMIN VIEW ---
+def admin_panel():
+    st.title("⚡ ADMIN CONTROL CENTER")
+    sync_telegram()
+    
+    tab1, tab2, tab3 = st.tabs(["📊 Performance", "📢 Manage Signals", "💬 Support Inbox"])
+    
+    with tab1:
+        df_all = pd.read_sql("SELECT * FROM signals", db_conn)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Signals", len(df_all))
+        active = len(df_all[df_all['status'] == 'Active'])
+        c2.metric("Active Signals", active)
+        c3.metric("Platform Status", "Online")
+        
+    with tab2:
+        st.subheader("Signal Database")
+        edited_df = st.data_editor(df_all, num_rows="dynamic", key="editor")
+        if st.button("Update Database"):
+            edited_df.to_sql('signals', db_conn, if_exists='replace', index=False)
+            st.success("Database Updated!")
+
+    with tab3:
+        st.subheader("User Support Tickets")
+        msgs = pd.read_sql("SELECT * FROM support WHERE reply IS NULL", db_conn)
+        if msgs.empty: st.info("No pending messages.")
+        for _, r in msgs.iterrows():
+            with st.chat_message("user"):
+                st.write(f"**From:** {r['email']}\n\n{r['msg']}")
+                reply = st.text_input("Your Reply", key=f"r_{r['id']}")
+                if st.button("Send Reply", key=f"b_{r['id']}"):
+                    db_conn.cursor().execute("UPDATE support SET reply=? WHERE id=?", (reply, r['id']))
+                    db_conn.commit()
+                    st.rerun()
+
+# --- 6. USER VIEW ---
 def user_dashboard():
     sync_telegram()
-    # Horizontal Top Menu (Custom UI)
     st.sidebar.image("https://cryptologos.cc/logos/binance-coin-bnb-logo.png", width=50)
-    st.sidebar.title("PRO NAVIGATOR")
-    menu = st.sidebar.selectbox("Jump to", ["🎯 Trade Signals", "📊 Market Hub", "🧮 Risk Tool", "💬 Help Center"])
+    menu = st.sidebar.selectbox("Navigation", ["🎯 Signals", "📊 Market", "🧮 Calculator", "💬 Support"])
 
-    if menu == "🎯 Trade Signals":
-        st.subheader("🎯 Live Premium Signals")
+    if menu == "🎯 Signals":
+        st.title("🎯 LIVE VIP SIGNALS")
         df = pd.read_sql("SELECT * FROM signals WHERE status='Active' ORDER BY id DESC", db_conn)
-        if df.empty:
-            st.info("Waiting for next high-probability signal...")
-        else:
-            for _, row in df.iterrows():
-                badge_color = "#2ebd85" if row['side'] == "LONG" else "#f6465d"
-                st.markdown(f"""
-                <div class="signal-card">
-                    <div style="display:flex; justify-content:space-between;">
-                        <span style="background:{badge_color}; color:white; padding:4px 12px; border-radius:4px; font-weight:bold;">{row['side']}</span>
-                        <span style="color:#848e9c;">{row['time']}</span>
-                    </div>
-                    <h2 style="margin:10px 0; color:white;">{row['pair']}</h2>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
-                        <div><small style="color:#848e9c;">ENTRY</small><br><b>{row['entry']}</b></div>
-                        <div><small style="color:#848e9c;">TARGET</small><br><b style="color:#2ebd85;">{row['tp']}</b></div>
-                        <div><small style="color:#848e9c;">STOP LOSS</small><br><b style="color:#f6465d;">{row['sl']}</b></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+        for _, row in df.iterrows():
+            badge = "#2ebd85" if row['side'] == "LONG" else "#f6465d"
+            st.markdown(f"""<div class="signal-card"><span style="background:{badge}; padding:3px 10px; border-radius:4px; font-weight:bold;">{row['side']}</span>
+            <h2 style="margin:10px 0;">{row['pair']}</h2><p>Entry: <b>{row['entry']}</b> | TP: <b>{row['tp']}</b> | SL: <b>{row['sl']}</b></p></div>""", unsafe_allow_html=True)
 
-    elif menu == "📊 Market Hub":
-        st.subheader("📊 Advanced Market Intel")
-        tab_a, tab_b = st.tabs(["Real-Time Chart", "Market Heatmap"])
-        with tab_a:
-            components.html('<div id="chart" style="height:500px;"><script src="https://s3.tradingview.com/tv.js"></script><script>new TradingView.widget({"autosize": true,"symbol": "BINANCE:BTCUSDT","interval": "H","theme": "dark","style": "1","locale": "en","container_id": "chart"});</script></div>', height=500)
-        with tab_b:
-            components.html('<script src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>{"colorTheme": "dark","height": 500,"width": "100%"}</script>', height=500)
+    elif menu == "📊 Market":
+        st.title("📊 MARKET ANALYSIS")
+        components.html('<div id="c" style="height:500px;"><script src="https://s3.tradingview.com/tv.js"></script><script>new TradingView.widget({"autosize": true,"symbol": "BINANCE:BTCUSDT","theme": "dark","container_id": "c"});</script></div>', height=500)
+        components.html('<script src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>{"colorTheme":"dark","width":"100%","height":500}</script>', height=500)
 
-    elif menu == "🧮 Risk Tool":
-        st.subheader("🧮 Position Size Calculator")
-        c1, c2 = st.columns(2)
-        bal = c1.number_input("Wallet Balance ($)", 100.0)
-        risk = c2.slider("Risk Per Trade (%)", 0.5, 5.0, 1.0)
-        sl_p = st.number_input("Stop Loss Distance (%)", 1.0)
-        if st.button("Calculate Position"):
-            size = (bal * (risk/100)) / (sl_p/100)
-            st.success(f"Recommended Trade Amount: **${size:.2f}**")
+    elif menu == "🧮 Calculator":
+        st.title("🧮 RISK CALCULATOR")
+        bal = st.number_input("Account Balance ($)", 100.0)
+        risk = st.slider("Risk (%)", 0.5, 5.0, 1.0)
+        if st.button("Calculate"):
+            st.success(f"Recommended Position: **${(bal * risk / 100) / 0.02:.2f}**")
 
-    elif menu == "💬 Help Center":
-        st.subheader("💬 Support Ticket")
-        with st.form("chat"):
-            msg = st.text_area("What is your query?")
-            if st.form_submit_button("SUBMIT TICKET"):
-                db_conn.cursor().execute("INSERT INTO support (email, msg, time) VALUES (?,?,?)", (st.session_state.user_email, msg, datetime.now().strftime("%H:%M")))
+    elif menu == "💬 Support":
+        st.title("💬 LIVE SUPPORT")
+        with st.form("sup"):
+            m = st.text_area("How can we help?")
+            if st.form_submit_button("SEND"):
+                db_conn.cursor().execute("INSERT INTO support (email, msg, time) VALUES (?,?,?)", (st.session_state.user_email, m, datetime.now().strftime("%H:%M")))
                 db_conn.commit()
-                st.toast("Ticket Created Successfully!")
+                st.toast("Sent!")
 
 # --- EXECUTION ---
 if not st.session_state.logged_in: login_ui()
@@ -164,6 +153,5 @@ else:
     if st.sidebar.button("LOGOUT"):
         st.session_state.clear()
         st.rerun()
-    user_dashboard() if not st.session_state.get('is_admin') else st.write("Admin View is ready in sidebar.")
+    admin_panel() if st.session_state.is_admin else user_dashboard()
 
-        
