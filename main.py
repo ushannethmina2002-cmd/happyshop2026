@@ -5,223 +5,202 @@ from datetime import datetime
 import streamlit.components.v1 as components
 import random
 
-# --- 1. DATABASE & LOGIC ---
+# --- 1. DATABASE & CONFIG ---
 def init_db():
-    conn = sqlite3.connect('crypto_ultra_v25.db', check_same_thread=False)
+    conn = sqlite3.connect('crypto_v28_animated.db', check_same_thread=False)
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS signals (id INTEGER PRIMARY KEY AUTOINCREMENT, pair TEXT, side TEXT, entry TEXT, tp TEXT, sl TEXT, status TEXT, time TEXT)')
-    c.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
-    defaults = [('app_name', 'CRYPTO ELITE ULTRA'), ('maintenance', 'OFF'), ('admin_pw', '2008')]
-    for k, v in defaults:
-        c.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?,?)', (k, v))
+    c.execute('CREATE TABLE IF NOT EXISTS alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, msg TEXT, time TEXT)')
     conn.commit()
     return conn
 
 db_conn = init_db()
 
-def get_sys(key):
-    res = db_conn.cursor().execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
-    return res[0] if res else "OFF"
-
-# --- 2. THE ULTRA-PREMIUM UI DESIGN (CSS) ---
-def apply_ultra_premium_style():
+# --- 2. THE ULTIMATE UI DESIGN (CSS) ---
+def apply_pro_style():
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
     
-    .stApp { background: radial-gradient(circle at 20% 20%, #1e2329 0%, #0b0e11 100%); color: white; font-family: 'Inter', sans-serif; }
+    .stApp { 
+        background: #0b0e11; /* Fallback for no animation */
+        color: white; 
+        font-family: 'Inter', sans-serif; 
+        position: relative;
+        overflow: hidden; /* Hide overflow from animations */
+    }
     
-    /* Neon Glass Cards */
+    /* Animated Background for Login Page */
+    .crypto-animation-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: -1;
+        overflow: hidden;
+        background: radial-gradient(circle at 20% 20%, #1a1e23 0%, #0b0e11 100%);
+    }
+
+    .crypto-coin {
+        position: absolute;
+        width: 30px; /* Size of the coins */
+        height: 30px;
+        background-color: rgba(255, 200, 0, 0.5); /* Goldish color */
+        border-radius: 50%;
+        opacity: 0;
+        animation: floatAndFade 15s infinite ease-in-out;
+        box-shadow: 0 0 15px rgba(255, 200, 0, 0.3);
+    }
+
+    @keyframes floatAndFade {
+        0% { transform: translateY(100vh) scale(0.5); opacity: 0; }
+        50% { opacity: 0.8; }
+        100% { transform: translateY(-50vh) scale(1.5); opacity: 0; }
+    }
+    
+    /* Generate multiple coins with staggered animation */
+    .crypto-coin:nth-child(1) { left: 10%; animation-delay: 0s; }
+    .crypto-coin:nth-child(2) { left: 20%; animation-delay: 2s; width: 25px; height: 25px; }
+    .crypto-coin:nth-child(3) { left: 30%; animation-delay: 4s; }
+    .crypto-coin:nth-child(4) { left: 40%; animation-delay: 6s; width: 35px; height: 35px; }
+    .crypto-coin:nth-child(5) { left: 50%; animation-delay: 8s; }
+    .crypto-coin:nth-child(6) { left: 60%; animation-delay: 10s; width: 20px; height: 20px; }
+    .crypto-coin:nth-child(7) { left: 70%; animation-delay: 12s; }
+    .crypto-coin:nth-child(8) { left: 80%; animation-delay: 14s; width: 40px; height: 40px; }
+
+
     .glass-card {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 20px;
         padding: 20px;
-        margin-bottom: 15px;
-        backdrop-filter: blur(10px);
-        transition: transform 0.2s ease-in-out;
+        margin-bottom: 20px;
+        backdrop-filter: blur(5px); /* Add blur for glass effect */
     }
-    .glass-card:hover { transform: translateY(-5px); }
     
-    .neon-green { color: #00ff88; text-shadow: 0 0 10px rgba(0, 255, 136, 0.5); }
-    .neon-red { color: #ff3b3b; text-shadow: 0 0 10px rgba(255, 59, 59, 0.5); }
+    .neon-green { color: #00ff88; text-shadow: 0 0 10px rgba(0, 255, 136, 0.4); }
+    .neon-red { color: #ff3b3b; text-shadow: 0 0 10px rgba(255, 59, 59, 0.4); }
     
-    /* Modern Badges */
-    .badge { padding: 4px 12px; border-radius: 50px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
-    .long-bg { background: rgba(0, 255, 136, 0.15); color: #00ff88; border: 1px solid #00ff88; }
-    .short-bg { background: rgba(255, 59, 59, 0.15); color: #ff3b3b; border: 1px solid #ff3b3b; }
-    .neutral-bg { background: rgba(255, 200, 0, 0.15); color: #ffc800; border: 1px solid #ffc800; }
+    .stat-box { background: #161a1e; padding: 10px; border-radius: 12px; text-align: center; border: 1px solid #2d3339; }
     
-    /* Buttons */
     .stButton>button {
         background: linear-gradient(90deg, #f0b90b, #ffca28) !important;
-        color: black !important;
-        border-radius: 12px !important;
-        font-weight: 800 !important;
-        border: none !important;
-        transition: all 0.2s ease-in-out;
-    }
-    .stButton>button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 0 15px rgba(240, 185, 11, 0.4);
+        color: black !important; font-weight: bold !important; border-radius: 12px !important;
     }
 
-    /* Progress Bar */
-    .stProgress > div > div > div > div {
-        background-color: #00ff88 !important;
+    /* Center login card */
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        z-index: 10;
+        position: relative;
+    }
+    .login-card {
+        background: rgba(0, 0, 0, 0.7); /* Darker background for login card */
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(10px);
+        width: 100%;
+        max-width: 400px;
+        text-align: center;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. COMPONENTS ---
-def draw_market_header():
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown('''<div class="glass-card" style="text-align:center;">
-            <small style="color:#848e9c;">Fear & Greed Index</small>
-            <h2 style="color:#f0b90b; margin:0;">68 <span style="font-size:14px; color:#848e9c;">Greed</span></h2>
-        </div>''', unsafe_allow_html=True)
-    with col2:
-        st.markdown('''<div class="glass-card" style="text-align:center;">
-            <small style="color:#848e9c;">Market Sentiment</small>
-            <h2 class="neon-green" style="margin:0;">VERY BULLISH</h2>
-        </div>''', unsafe_allow_html=True)
-
-def draw_ticker():
+# --- 3. WIDGETS ---
+def draw_live_charts():
     components.html("""
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
-        {"symbols": [{"proName": "BINANCE:BTCUSDT", "title": "BTC"}, {"proName": "BINANCE:ETHUSDT", "title": "ETH"}, {"proName": "BINANCE:SOLUSDT", "title": "SOL"}], "colorTheme": "dark", "isTransparent": true}
-        </script>""", height=50)
+    <div style="height:400px;">
+    <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js" async>
+    {"interval": "1m", "width": "100%", "isTransparent": true, "height": "100%", "symbol": "BINANCE:BTCUSDT", "showIntervalTabs": true, "locale": "en", "colorTheme": "dark"}
+    </script></div>""", height=400)
 
 # --- 4. PANELS ---
-def admin_portal():
-    st.markdown("<h2 class='neon-green'>👨‍💻 MASTER CONTROL HUB</h2>", unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["📢 POST SIGNAL", "📊 ALL SIGNALS", "⚙️ SYSTEM"])
+def admin_hub():
+    st.markdown("<h2 class='neon-green'>👨‍💻 MASTER ADMIN</h2>", unsafe_allow_html=True)
+    tab1, tab2 = st.tabs(["📢 New Signal", "🚨 Send Alert"])
     
     with tab1:
-        with st.form("new_sig"):
-            p = st.text_input("Asset Pair (e.g. BTC/USDT)"); s = st.selectbox("Side", ["LONG", "SHORT"])
-            en = st.text_input("Entry"); tp = st.text_input("Target"); sl = st.text_input("Stop")
-            if st.form_submit_button("PUBLISH TO VIP"):
+        with st.form("sig"):
+            p = st.text_input("Pair"); s = st.selectbox("Side", ["LONG", "SHORT"])
+            en = st.text_input("Entry"); tp = st.text_input("TP"); sl = st.text_input("SL")
+            if st.form_submit_button("Post Signal"):
                 db_conn.cursor().execute("INSERT INTO signals (pair,side,entry,tp,sl,status,time) VALUES (?,?,?,?,?,?,?)",
-                                         (p,s,en,tp,sl,"Active",datetime.now().strftime("%Y-%m-%d %H:%M")))
-                db_conn.commit(); st.success("Signal is LIVE!")
+                                         (p,s,en,tp,sl,"Active",datetime.now().strftime("%H:%M")))
+                db_conn.commit(); st.success("Published!")
 
     with tab2:
-        df = pd.read_sql("SELECT * FROM signals", db_conn)
-        st.dataframe(df, use_container_width=True)
-        
-    with tab3:
-        st.write("### Maintenance Settings")
-        mnt = st.toggle("Maintenance Mode", value=(get_sys('maintenance') == "ON"))
-        if st.button("Apply Changes"):
-            val = "ON" if mnt else "OFF"
-            db_conn.cursor().execute("UPDATE settings SET value=? WHERE key='maintenance'", (val,))
-            db_conn.commit(); st.rerun()
+        msg = st.text_area("Global Alert Message")
+        if st.button("Broadcast Now"):
+            db_conn.cursor().execute("INSERT INTO alerts (msg, time) VALUES (?,?)", (msg, datetime.now().strftime("%H:%M")))
+            db_conn.commit(); st.success("Sent!")
 
-def user_portal():
-    if get_sys('maintenance') == "ON":
-        st.warning("🛠️ SYSTEM UNDER MAINTENANCE. PLEASE CHECK LATER.")
-        st.stop()
-        
-    st.markdown("<h1 style='text-align:center; font-weight:900;'>CRYPTO ELITE ULTRA</h1>", unsafe_allow_html=True)
-    draw_ticker()
-    
-    # NEW: AI-Driven Analysis Card
-    st.markdown("### 🧠 AI-Driven Insights")
-    st.markdown(f'''
-    <div class="glass-card">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <b>Global Market Trend</b>
-            <span class="badge long-bg">OPTIMISTIC</span>
-        </div>
-        <p style="font-size:14px; color:#848e9c; margin-top:10px;">
-            AI predicts continued upward momentum for BTC in the short term.
-        </p>
-    </div>
-    ''', unsafe_allow_html=True)
+def user_hub():
+    # 1. Ticker Tape
+    components.html("""<script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
+    {"symbols": [{"proName": "BINANCE:BTCUSDT", "title": "BTC"}, {"proName": "BINANCE:ETHUSDT", "title": "ETH"}], "colorTheme": "dark", "isTransparent": true}</script>""", height=50)
 
-    draw_market_header() # Fear & Greed + Market Sentiment
-    
-    # NEW: P/L Overview
-    st.markdown("### 📈 Performance Overview")
+    # 2. Live Alerts
+    alerts = pd.read_sql("SELECT * FROM alerts ORDER BY id DESC LIMIT 1", db_conn)
+    for _, a in alerts.iterrows():
+        st.warning(f"🔔 ALERT: {a['msg']}")
+
+    # 3. Market Stats Card
+    st.markdown("### 📊 Market Summary")
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown(f'''
-        <div class="glass-card" style="text-align:center;">
-            <small style="color:#848e9c;">Total Profit</small>
-            <h3 class="neon-green" style="margin:0;">+ $ {random.randint(1000, 5000)}.00</h3>
-        </div>
-        ''', unsafe_allow_html=True)
+        st.markdown('<div class="glass-card"><small>Global Volatility</small><h2 class="neon-green">LOW</h2></div>', unsafe_allow_html=True)
     with col2:
-        st.markdown(f'''
-        <div class="glass-card" style="text-align:center;">
-            <small style="color:#848e9c;">Win Rate</small>
-            <h3 class="neon-green" style="margin:0;">{random.randint(70, 95)}%</h3>
-        </div>
-        ''', unsafe_allow_html=True)
+        st.markdown('<div class="glass-card"><small>Success Rate</small><h2 style="color:#f0b90b;">94%</h2></div>', unsafe_allow_html=True)
 
-    st.markdown("### 🎯 VIP TRADING SIGNALS")
+    # 4. Active Signals
+    st.markdown("### 🎯 VIP Trading Signals")
     df = pd.read_sql("SELECT * FROM signals ORDER BY id DESC LIMIT 5", db_conn)
-    if df.empty:
-        st.info("Searching for premium setups...")
-    else:
-        for _, r in df.iterrows():
-            b_class = "long-bg" if r['side'] == "LONG" else "short-bg"
-            st.markdown(f"""
-            <div class="glass-card">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-size:18px; font-weight:bold;">{r['pair']}</span>
-                    <span class="badge {b_class}">{r['side']}</span>
-                </div>
-                <div style="margin-top:15px; display:grid; grid-template-columns:1fr 1fr 1fr; text-align:center;">
-                    <div><small style="color:#848e9c;">Entry</small><br><b>{r['entry']}</b></div>
-                    <div><small style="color:#848e9c;">Target</small><br><b class="neon-green">{r['tp']}</b></div>
-                    <div><small style="color:#848e9c;">Stop</small><br><b class="neon-red">{r['sl']}</b></div>
-                </div>
-                <div style="margin-top:15px; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;">
-                    <small style="color:#848e9c;">Posted: {r['time']} • <span class="neon-green">Live Action</span></small>
-                </div>
+    if df.empty: st.info("Waiting for market setup...")
+    for _, r in df.iterrows():
+        color = "#00ff88" if r['side'] == "LONG" else "#ff3b3b"
+        st.markdown(f"""
+        <div class="glass-card">
+            <div style="display:flex; justify-content:space-between;">
+                <b>{r['pair']}</b> <span style="color:{color}; font-weight:bold;">{r['side']}</span>
             </div>
-            """, unsafe_allow_html=True)
-
-    # NEW: Recent Transactions/Closed Signals
-    st.markdown("### ⏳ Recent Activity")
-    st.markdown(f'''
-    <div class="glass-card">
-        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-            <span>ETH/USDT <span class="badge long-bg">LONG</span></span>
-            <span class="neon-green">+12.5%</span>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; margin-top:10px; text-align:center;">
+                <div class="stat-box"><small>Entry</small><br><b>{r['entry']}</b></div>
+                <div class="stat-box"><small>Target</small><br><b class="neon-green">{r['tp']}</b></div>
+                <div class="stat-box"><small>Stop</small><br><b class="neon-red">{r['sl']}</b></div>
+            </div>
         </div>
-        <div style="display:flex; justify-content:space-between;">
-            <span>SOL/USDT <span class="badge short-bg">SHORT</span></span>
-            <span class="neon-red">-3.2%</span>
-        </div>
-    </div>
-    ''', unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    st.markdown("### 🚀 UPGRADE TO VIP")
-    st.markdown('''
-    <div class="glass-card">
-        <p style="font-size:16px; text-align:center;">Unlock all premium features and maximize your gains!</p>
-        <button style="width:100%; border:none; padding:10px; border-radius:8px; background-color:#00ff88; color:black; font-weight:bold;">GET VIP NOW</button>
-    </div>
-    ''', unsafe_allow_html=True)
+    # 5. Live Technical Gauge
+    st.markdown("### ⚡ Live Technical Analysis")
+    draw_live_charts()
 
-# --- 5. SYSTEM RUN ---
-apply_ultra_premium_style()
+# --- 5. LOGIC ---
+apply_pro_style()
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    _, col, _ = st.columns([1,2,1])
-    with col:
-        st.title("Elite Login")
-        u = st.text_input("Email/Username")
-        p = st.text_input("Password", type="password")
-        if st.button("UNLOCK PRO ACCESS"):
-            st.session_state.update({"logged_in": True, "is_admin": (u=="ushan2008@gmail.com")})
-            st.rerun()
+    # Crypto Animation Background
+    st.markdown('<div class="crypto-animation-bg">' + 
+                ''.join([f'<div class="crypto-coin" style="left: {random.randint(0, 100)}%; animation-delay: {random.randint(0, 15)}s; width: {random.randint(20, 40)}px; height: {random.randint(20, 40)}px;"></div>' for _ in range(10)]) +
+                '</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="login-container">', unsafe_allow_html=True)
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center; color:white;'>ELITE LOGIN</h1>", unsafe_allow_html=True)
+    u = st.text_input("Username/Email").lower()
+    p = st.text_input("Password", type="password")
+    if st.button("SIGN IN"):
+        st.session_state.update({"logged_in": True, "is_admin": (u=="ushan2008@gmail.com")})
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True) # close login-card
+    st.markdown('</div>', unsafe_allow_html=True) # close login-container
 else:
-    if st.sidebar.button("LOGOUT"): st.session_state.clear(); st.rerun()
-    if st.session_state.is_admin: admin_portal()
-    else: user_portal()
+    if st.sidebar.button("Logout"): st.session_state.clear(); st.rerun()
+    if st.session_state.is_admin: admin_hub()
+    else: user_hub()
