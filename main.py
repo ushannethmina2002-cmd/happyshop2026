@@ -14,10 +14,39 @@ def load_data(filename):
         return pd.read_csv(filename).to_dict('records')
     return []
 
+# --- ලංකාවේ දිස්ත්‍රික්ක සහ නගර දත්ත ---
+SL_DATA = {
+    "Colombo": ["Colombo 1-15", "Dehiwala", "Mount Lavinia", "Nugegoda", "Maharagama", "Kottawa", "Malabe", "Battaramulla"],
+    "Gampaha": ["Gampaha", "Negombo", "Kadawatha", "Kiribathgoda", "Wattala", "Ja-Ela", "Veyangoda"],
+    "Kalutara": ["Kalutara", "Panadura", "Horana", "Beruwala", "Matugama"],
+    "Kandy": ["Kandy", "Peradeniya", "Katugastota", "Gampola", "Nawalapitiya"],
+    "Matale": ["Matale", "Dambulla", "Sigiriya"],
+    "Nuwara Eliya": ["Nuwara Eliya", "Hatton", "Talawakele"],
+    "Galle": ["Galle", "Hikkaduwa", "Ambalangoda", "Karapitiya"],
+    "Matara": ["Matara", "Akuressa", "Weligama"],
+    "Hambantota": ["Hambantota", "Tangalle", "Beliatta"],
+    "Jaffna": ["Jaffna", "Chavakachcheri"],
+    "Mannar": ["Mannar"],
+    "Vavuniya": ["Vavuniya"],
+    "Mullaitivu": ["Mullaitivu"],
+    "Kilinochchi": ["Kilinochchi"],
+    "Batticaloa": ["Batticaloa"],
+    "Ampara": ["Ampara", "Kalmunai"],
+    "Trincomalee": ["Trincomalee"],
+    "Kurunegala": ["Kurunegala", "Kuliyapitiya", "Narammala", "Pannala"],
+    "Puttalam": ["Puttalam", "Chilaw", "Marawila"],
+    "Anuradhapura": ["Anuradhapura", "Eppawala", "Kekirawa"],
+    "Polonnaruwa": ["Polonnaruwa"],
+    "Badulla": ["Badulla", "Bandarawela", "Hali-Ela"],
+    "Moneragala": ["Moneragala", "Wellawaya"],
+    "Ratnapura": ["Ratnapura", "Embilipitiya", "Balangoda"],
+    "Kegalle": ["Kegalle", "Mawanella", "Warakapola"]
+}
+
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(page_title="Happy Shop | Full Enterprise ERP", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. SESSION STATE (දත්ත ස්ථාවරත්වය තහවුරු කිරීම) ---
+# --- 2. SESSION STATE ---
 if 'orders' not in st.session_state:
     st.session_state.orders = load_data('orders.csv')
 
@@ -26,7 +55,6 @@ if 'stocks' not in st.session_state:
         df_s = pd.read_csv('stocks.csv')
         st.session_state.stocks = dict(zip(df_s.Item, df_s.Qty))
     else:
-        # මුල් දත්ත (පළමු වරට පමණි)
         st.session_state.stocks = {"Kesharaja Hair Oil [VGLS0005]": 100, "Crown 1": 50, "Kalkaya": 75}
         save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
 
@@ -53,7 +81,7 @@ if not st.session_state.authenticated:
                 st.error("Invalid Username or Password")
     st.stop()
 
-# --- 4. CSS & PRINTING DESIGN ---
+# --- 4. CSS & PRINTING DESIGN (ප්‍රින්ට් එක නිවැරදි කර ඇත) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0d1117; color: #c9d1d9; }
@@ -66,13 +94,12 @@ st.markdown("""
     
     @media print {
         body * { visibility: hidden; }
-        .print-area, .print-area * { visibility: visible; }
-        .print-area { position: absolute; left: 0; top: 0; width: 500px; color: black !important; background: white !important; padding: 15px; border: 2px solid black; }
-        .bill-head { display: flex; justify-content: space-between; border-bottom: 2px solid black; padding-bottom: 5px; }
-        .bc-box { flex: 3; border-right: 2px solid black; padding: 10px; font-size: 30px; letter-spacing: 5px; text-align: center; }
-        .qty-box { flex: 1; padding: 10px; font-weight: bold; font-size: 22px; text-align: center; }
+        .print-area, .print-area * { visibility: visible !important; }
+        .print-area { position: absolute; left: 0; top: 0; width: 100%; color: black !important; background: white !important; padding: 20px; }
+        .bill-head { border-bottom: 2px solid black; padding-bottom: 10px; font-size: 24px; }
+        .bc-box { border: 2px solid black; padding: 10px; font-size: 28px; text-align: center; margin: 10px 0; }
         .way-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .way-table td, .way-table th { border: 1px solid black; padding: 6px; font-size: 13px; }
+        .way-table td, .way-table th { border: 1px solid black; padding: 10px; font-size: 16px; text-align: left; color: black; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -84,13 +111,13 @@ with st.sidebar:
     
     sub = ""
     if menu == "🧾 Orders": sub = st.radio("Order Menu", ["New Order", "View Lead", "Order Tracking", "Add Lead"])
-    elif menu == "🚚 Shipped Items": sub = st.radio("Shipping Menu", ["Dispatch & Print", "Shipped List", "Delivery Summary"])
+    elif menu == "🚚 Shipped Items": sub = st.radio("Shipping Menu", ["Confirm Dispatch", "Dispatch & Print", "Shipped List"])
     elif menu == "📦 GRN": sub = st.radio("GRN Menu", ["New GRN", "GRN List"])
     elif menu == "📊 Stocks": sub = st.radio("Stock Menu", ["View Stocks", "Adjustment"])
 
-# --- 6. DASHBOARD (Metrics & Analytics) ---
+# --- 6. DASHBOARD ---
 if menu == "🏠 Dashboard":
-    low_stock_items = [item for item, qty in st.session_state.stocks.items() if qty < 10]
+    low_stock_items = [item for item, qty in st.session_state.stocks.items() if int(qty) < 10]
     if low_stock_items:
         st.error(f"⚠️ **Low Stock Alert:** {', '.join(low_stock_items)} are running low!")
 
@@ -127,45 +154,45 @@ if menu == "🏠 Dashboard":
             fig2 = px.bar(df_orders, x='status', color='status')
             st.plotly_chart(fig2, use_container_width=True)
 
-# --- 7. ORDERS (View Lead & Tracking) ---
+# --- 7. ORDERS ---
 elif menu == "🧾 Orders":
     if sub in ["New Order", "Add Lead"]:
-        st.subheader(f"📝 {sub}")
+        st.subheader(f"📝 Happy Shop - {sub}")
         with st.form("full_order", clear_on_submit=True):
             c1, c2 = st.columns(2)
             with c1:
                 name = st.text_input("Customer Name *")
                 phone = st.text_input("Contact Number 1 *")
                 addr = st.text_area("Address *")
-                city = st.text_input("City")
-                district = st.selectbox("District", ["Colombo", "Gampaha", "Kandy", "Galle", "Kalutara", "Kurunegala", "Other"])
+                dist = st.selectbox("District", list(SL_DATA.keys()))
+                city = st.selectbox("City", SL_DATA[dist])
             with c2:
                 prod = st.selectbox("Product", list(st.session_state.stocks.keys()))
                 qty = st.number_input("Qty", min_value=1, value=1)
                 price = st.number_input("Sale Amount", value=2950.0)
                 delivery = st.number_input("Delivery Charge", value=350.0)
                 discount = st.number_input("Discount", value=0.0)
-                courier = st.selectbox("Courier Company", ["Koombiyo", "Domex", "Pronto"])
+                courier = st.selectbox("Courier Company", ["Koombiyo", "Domex", "Pronto", "Royal Express"])
             
             if st.form_submit_button("🚀 SAVE ORDER"):
                 oid = f"HS-{uuid.uuid4().hex[:6].upper()}"
                 st.session_state.orders.append({
-                    "id": oid, "name": name, "phone": phone, "addr": addr, "city": city, "dist": district,
+                    "id": oid, "name": name, "phone": phone, "addr": addr, "city": city, "dist": dist,
                     "prod": prod, "qty": qty, "price": price, "delivery": delivery, "discount": discount,
-                    "total": (price * qty) + delivery - discount, "status": "pending", "date": str(date.today()), "courier": courier
+                    "total": (price * qty) + delivery - discount, "status": "pending", "date": str(date.today()), "courier": courier, "printed": "No"
                 })
                 save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                st.success(f"Order {oid} Saved Permanently!")
+                st.success(f"Order {oid} Saved Successfully!")
 
     elif sub == "View Lead":
         st.subheader("📋 Lead List")
         search_q = st.text_input("🔍 Search by Name or Phone")
-        filter_status = st.multiselect("Filter Status", ["pending", "confirm", "noanswer", "cancel", "fake", "shipped", "returned"], default=["pending", "confirm"])
+        filter_status = st.multiselect("Filter Status", ["pending", "confirm", "noanswer", "cancel", "fake"], default=["pending"])
         
         for idx, o in enumerate(st.session_state.orders):
             if (search_q.lower() in str(o['name']).lower() or search_q in str(o['phone'])) and (o['status'] in filter_status):
                 with st.expander(f"{o['id']} - {o['name']} ({o['status'].upper()})"):
-                    st.write(f"📞 {o['phone']} | 📍 {o['addr']}, {o['city']}")
+                    st.write(f"📞 {o['phone']} | 📍 {o['addr']}, {o['city']}, {o['dist']}")
                     cols = st.columns(5)
                     if cols[0].button("Confirm ✅", key=f"c{idx}"): 
                         st.session_state.orders[idx]['status'] = 'confirm'
@@ -190,43 +217,61 @@ elif menu == "🧾 Orders":
             if results: st.table(pd.DataFrame(results))
             else: st.warning("No records found.")
 
-# --- 8. SHIPPED ITEMS ---
+# --- 8. SHIPPED ITEMS (Confirm, Dispatch & Print) ---
 elif menu == "🚚 Shipped Items":
-    if sub == "Dispatch & Print":
-        ready = [o for o in st.session_state.orders if o['status'] == 'confirm']
-        if not ready: st.info("No confirmed orders to dispatch.")
-        for idx, ro in enumerate(ready):
+    if sub == "Confirm Dispatch":
+        st.subheader("✅ Confirm Orders for Dispatch")
+        ready_to_confirm = [o for o in st.session_state.orders if o['status'] == 'confirm']
+        if not ready_to_confirm:
+            st.info("No orders waiting for dispatch confirmation.")
+        else:
+            for idx, o in enumerate(ready_to_confirm):
+                col1, col2 = st.columns([4, 1])
+                col1.write(f"**{o['id']}** - {o['name']} | {o['city']} | {o['prod']} (x{o['qty']})")
+                if col2.button("Ready to Print", key=f"conf_{idx}"):
+                    o['status'] = 'ready_print'
+                    save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
+                    st.rerun()
+
+    elif sub == "Dispatch & Print":
+        st.subheader("🖨️ Dispatch & Print Label")
+        to_print = [o for o in st.session_state.orders if o['status'] == 'ready_print']
+        if not to_print:
+            st.info("No orders ready for printing.")
+        for idx, ro in enumerate(to_print):
             st.markdown(f"""
             <div class="print-area">
-                <div class="bill-head"><b>HAPPY SHOP (PVT) LTD</b><br>ID: {ro['id']}</div>
-                <div style="display:flex; border-bottom:2px solid black;">
-                    <div class="bc-box">|||| {ro['id']} ||||</div>
-                    <div class="qty-box">QTY: {ro['qty']}</div>
-                </div>
+                <div class="bill-head"><b>HAPPY SHOP (PVT) LTD</b><br>Order ID: {ro['id']}</div>
+                <div class="bc-box">CODE: {ro['id']}</div>
                 <table class="way-table">
-                    <tr><th>Customer Details</th><th>Order Details</th></tr>
+                    <tr><th>Customer Details</th><th>Item & Total</th></tr>
                     <tr>
-                        <td><b>{ro['name']}</b><br>{ro['addr']}<br>Tel: {ro['phone']}</td>
-                        <td>{ro['prod']} (x{ro['qty']})<br><b>Total: LKR {float(ro['total']):.2f}</b></td>
+                        <td><b>{ro['name']}</b><br>{ro['addr']}<br>{ro['city']}, {ro['dist']}<br>Tel: {ro['phone']}</td>
+                        <td>{ro['prod']} (x{ro['qty']})<br>Courier: {ro['courier']}<br><b>Total: LKR {float(ro['total']):.2f}</b></td>
                     </tr>
                 </table>
             </div>
             """, unsafe_allow_html=True)
-            if st.button(f"Print & Ship {ro['id']}", key=f"p{idx}"):
+            if st.button(f"Print & Move to Shipped {ro['id']}", key=f"p_{idx}"):
+                # ස්ටොක් අඩු කිරීම
                 st.session_state.stocks[ro['prod']] -= int(ro['qty'])
+                # ස්ටේටස් වෙනස් කිරීම
                 for o in st.session_state.orders: 
-                    if o['id'] == ro['id']: o['status'] = 'shipped'
+                    if o['id'] == ro['id']: 
+                        o['status'] = 'shipped'
+                        o['printed'] = 'Yes'
                 save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
                 save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
-                st.components.v1.html("<script>window.print(); setTimeout(()=>window.location.reload(), 1000);</script>")
+                st.components.v1.html("<script>window.print(); setTimeout(()=>window.location.reload(), 2000);</script>")
 
     elif sub == "Shipped List":
+        st.subheader("📦 Shipped Items List")
         shipped = [o for o in st.session_state.orders if o['status'] == 'shipped']
         if shipped:
             df_shipped = pd.DataFrame(shipped)
             st.dataframe(df_shipped)
-            st.download_button("📥 Download Shipped List", df_shipped.to_csv(index=False).encode('utf-8'), "shipped.csv")
-        else: st.info("No shipped items.")
+            st.download_button("📥 Download Shipped List", df_shipped.to_csv(index=False).encode('utf-8'), "shipped_list.csv")
+        else: st.info("No shipped items yet.")
 
 # --- 9. GRN, EXPENSES & RETURNS ---
 elif menu == "📦 GRN":
@@ -239,7 +284,7 @@ elif menu == "📦 GRN":
                 st.session_state.grn_history.append({"date": str(date.today()), "prod": p, "qty": q})
                 save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
                 save_data(pd.DataFrame(st.session_state.grn_history), 'grn.csv')
-                st.success("Stock Updated & Logged!")
+                st.success("Stock Updated!")
     else: 
         if st.session_state.grn_history: st.table(pd.DataFrame(st.session_state.grn_history))
 
@@ -263,19 +308,12 @@ elif menu == "🔄 Return":
                 st.session_state.stocks[o['prod']] += int(o['qty'])
                 save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
                 save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
-                st.success(f"Stock for {rid} Added Back & Status Updated.")
+                st.success(f"Stock for {rid} Added Back.")
 
 elif menu == "📊 Stocks":
+    st.subheader("📈 Inventory Status")
     df_s = pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Available Qty"])
     st.table(df_s)
-    st.write("**Quick Adjustment**")
-    adj_p = st.selectbox("Product to Adjust", list(st.session_state.stocks.keys()))
-    adj_q = st.number_input("New Total Qty", value=int(st.session_state.stocks[adj_p]))
-    if st.button("Update Stock"):
-        st.session_state.stocks[adj_p] = adj_q
-        save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
-        st.success("Stock Adjusted!")
-        st.rerun()
 
 elif menu == "🛍️ Products":
     with st.form("p"):
@@ -284,6 +322,5 @@ elif menu == "🛍️ Products":
             if n and n not in st.session_state.stocks:
                 st.session_state.stocks[n] = 0
                 save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
-                st.success(f"{n} Added to Inventory Permanently!")
+                st.success(f"{n} Added!")
                 st.rerun()
-            else: st.warning("Product already exists or name is empty.")
