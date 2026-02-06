@@ -81,7 +81,7 @@ if not st.session_state.authenticated:
                 st.error("Invalid Username or Password")
     st.stop()
 
-# --- 4. CSS & PRINTING DESIGN (ප්‍රින්ට් එක නිවැරදි කර ඇත) ---
+# --- 4. CSS & PRINTING DESIGN ---
 st.markdown("""
     <style>
     .stApp { background-color: #0d1117; color: #c9d1d9; }
@@ -92,6 +92,9 @@ st.markdown("""
     .bg-x { background: #dc3545; } .bg-f { background: #343a40; } .bg-t { background: #007bff; }
     .val { font-size: 24px; display: block; }
     
+    .ship-header { background-color: #1f2937; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #374151; }
+    .status-tab { padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; margin-right: 5px; }
+
     @media print {
         body * { visibility: hidden; }
         .print-area, .print-area * { visibility: visible !important; }
@@ -111,7 +114,7 @@ with st.sidebar:
     
     sub = ""
     if menu == "🧾 Orders": sub = st.radio("Order Menu", ["New Order", "View Lead", "Order Tracking", "Add Lead"])
-    elif menu == "🚚 Shipped Items": sub = st.radio("Shipping Menu", ["Confirm Dispatch", "Dispatch & Print", "Shipped List"])
+    elif menu == "🚚 Shipped Items": sub = st.radio("Shipping Menu", ["Shipping Dashboard", "Confirm Dispatch", "Dispatch & Print", "Shipped List"])
     elif menu == "📦 GRN": sub = st.radio("GRN Menu", ["New GRN", "GRN List"])
     elif menu == "📊 Stocks": sub = st.radio("Stock Menu", ["View Stocks", "Adjustment"])
 
@@ -217,9 +220,44 @@ elif menu == "🧾 Orders":
             if results: st.table(pd.DataFrame(results))
             else: st.warning("No records found.")
 
-# --- 8. SHIPPED ITEMS (Confirm, Dispatch & Print) ---
+# --- 8. SHIPPED ITEMS (නව Shipping Dashboard එක සමඟ) ---
 elif menu == "🚚 Shipped Items":
-    if sub == "Confirm Dispatch":
+    if sub == "Shipping Dashboard":
+        st.markdown('<div class="ship-header"><h3>🔍 Search orders for shipping</h3>', unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns(4)
+        f_user = c1.selectbox("User", ["Any", "Admin"])
+        f_date = c2.selectbox("Date Range", ["Disable", "Today", "Last 7 Days"])
+        f_courier = c3.selectbox("Courier", ["All", "Koombiyo", "Domex", "Pronto", "Royal Express"])
+        f_drop = c4.selectbox("Dropshipper", ["Only Company Orders"])
+        
+        st.markdown('<button style="background-color: #059669; color: white; border: none; padding: 8px 20px; border-radius: 5px;">Search</button></div>', unsafe_allow_html=True)
+        
+        # දත්ත පෙරීම
+        ready_orders = [o for o in st.session_state.orders if o['status'] in ['confirm', 'ready_print']]
+        
+        st.info(f"{len(ready_orders)} items have to ship | Total: 0")
+        
+        st.markdown("---")
+        st.subheader(f"Ready to Ship List ({len(ready_orders)})")
+        
+        # පින්තූරයේ ඇති ආකාරයටම Status ටැබ් පෙන්වීම
+        st.markdown("""
+            <span class="status-tab" style="background-color: #ec4899;">HELD ORDERS</span>
+            <span class="status-tab" style="background-color: #ef4444;">WRONG WAY</span>
+            <span class="status-tab" style="background-color: #f59e0b;">RESET</span>
+            <span class="status-tab" style="background-color: #10b981;">WEB ORDERS</span>
+            <span class="status-tab" style="background-color: #3b82f6;">EXCHANGING</span>
+        """, unsafe_allow_html=True)
+        
+        if ready_orders:
+            df_ready = pd.DataFrame(ready_orders)
+            # වගුව පෙන්වීමට අවශ්‍ය කොලම්ස් පමණක් තේරීම
+            display_cols = ['date', 'id', 'prod', 'qty', 'price', 'name', 'addr', 'city', 'phone', 'status']
+            st.dataframe(df_ready[display_cols], use_container_width=True)
+        else:
+            st.warning("No data available in table")
+
+    elif sub == "Confirm Dispatch":
         st.subheader("✅ Confirm Orders for Dispatch")
         ready_to_confirm = [o for o in st.session_state.orders if o['status'] == 'confirm']
         if not ready_to_confirm:
@@ -253,9 +291,7 @@ elif menu == "🚚 Shipped Items":
             </div>
             """, unsafe_allow_html=True)
             if st.button(f"Print & Move to Shipped {ro['id']}", key=f"p_{idx}"):
-                # ස්ටොක් අඩු කිරීම
                 st.session_state.stocks[ro['prod']] -= int(ro['qty'])
-                # ස්ටේටස් වෙනස් කිරීම
                 for o in st.session_state.orders: 
                     if o['id'] == ro['id']: 
                         o['status'] = 'shipped'
@@ -273,7 +309,7 @@ elif menu == "🚚 Shipped Items":
             st.download_button("📥 Download Shipped List", df_shipped.to_csv(index=False).encode('utf-8'), "shipped_list.csv")
         else: st.info("No shipped items yet.")
 
-# --- 9. GRN, EXPENSES & RETURNS ---
+# --- 9. GRN, EXPENSES & RETURNS (කිසිවක් ඉවත් කර නැත) ---
 elif menu == "📦 GRN":
     if sub == "New GRN":
         with st.form("grn"):
@@ -314,6 +350,15 @@ elif menu == "📊 Stocks":
     st.subheader("📈 Inventory Status")
     df_s = pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Available Qty"])
     st.table(df_s)
+    
+    st.write("**Quick Adjustment**")
+    adj_p = st.selectbox("Product to Adjust", list(st.session_state.stocks.keys()))
+    adj_q = st.number_input("New Total Qty", value=int(st.session_state.stocks[adj_p]))
+    if st.button("Update Stock"):
+        st.session_state.stocks[adj_p] = adj_q
+        save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
+        st.success("Stock Adjusted!")
+        st.rerun()
 
 elif menu == "🛍️ Products":
     with st.form("p"):
