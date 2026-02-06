@@ -5,11 +5,11 @@ import uuid
 import os
 import plotly.express as px  # Analytics සඳහා
 
-# --- 0. DATA PERSISTENCE (CSV ලොජික් එක) ---
+# --- 0. DATA PERSISTENCE (ස්ථීරව දත්ත තබා ගැනීම) ---
 def save_data(df, filename):
     df.to_csv(filename, index=False)
 
-def load_data(filename, columns):
+def load_data(filename):
     if os.path.exists(filename):
         return pd.read_csv(filename).to_dict('records')
     return []
@@ -17,21 +17,25 @@ def load_data(filename, columns):
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(page_title="Happy Shop | Full Enterprise ERP", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. SESSION STATE (යාවත්කාලීන කරන ලද දත්ත පද්ධතිය) ---
+# --- 2. SESSION STATE (දත්ත ස්ථාවරත්වය තහවුරු කිරීම) ---
 if 'orders' not in st.session_state:
-    st.session_state.orders = load_data('orders.csv', [])
+    st.session_state.orders = load_data('orders.csv')
+
 if 'stocks' not in st.session_state:
-    # ස්ටොක් එක dictionary එකක් නිසා වෙනම ලෝඩ් කරමු
     if os.path.exists('stocks.csv'):
         df_s = pd.read_csv('stocks.csv')
         st.session_state.stocks = dict(zip(df_s.Item, df_s.Qty))
     else:
+        # මුල් දත්ත (පළමු වරට පමණි)
         st.session_state.stocks = {"Kesharaja Hair Oil [VGLS0005]": 100, "Crown 1": 50, "Kalkaya": 75}
+        save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
 
 if 'expenses' not in st.session_state:
-    st.session_state.expenses = load_data('expenses.csv', [])
+    st.session_state.expenses = load_data('expenses.csv')
+
 if 'grn_history' not in st.session_state:
-    st.session_state.grn_history = load_data('grn.csv', [])
+    st.session_state.grn_history = load_data('grn.csv')
+
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
@@ -86,7 +90,6 @@ with st.sidebar:
 
 # --- 6. DASHBOARD (Metrics & Analytics) ---
 if menu == "🏠 Dashboard":
-    # Low Stock Alert Check
     low_stock_items = [item for item, qty in st.session_state.stocks.items() if qty < 10]
     if low_stock_items:
         st.error(f"⚠️ **Low Stock Alert:** {', '.join(low_stock_items)} are running low!")
@@ -104,24 +107,21 @@ if menu == "🏠 Dashboard":
     """, unsafe_allow_html=True)
 
     st.subheader("📊 Profit & Loss Overview")
-    total_rev = sum([o['total'] for o in st.session_state.orders if o['status'] == 'shipped'])
-    total_exp = sum([e['amount'] for e in st.session_state.expenses])
+    total_rev = sum([float(o['total']) for o in st.session_state.orders if o['status'] == 'shipped'])
+    total_exp = sum([float(e['amount']) for e in st.session_state.expenses])
     
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Shipped Revenue", f"LKR {total_rev:,.2f}")
     c2.metric("Total Expenses", f"LKR {total_exp:,.2f}")
     c3.metric("Net Profit", f"LKR {total_rev - total_exp:,.2f}")
 
-    # --- Charts (Analytics) ---
     if st.session_state.orders:
         df_orders = pd.DataFrame(st.session_state.orders)
         col_chart1, col_chart2 = st.columns(2)
-        
         with col_chart1:
             st.write("**Sales by District**")
             fig1 = px.pie(df_orders, names='dist', hole=0.4)
             st.plotly_chart(fig1, use_container_width=True)
-            
         with col_chart2:
             st.write("**Order Status Distribution**")
             fig2 = px.bar(df_orders, x='status', color='status')
@@ -155,16 +155,15 @@ elif menu == "🧾 Orders":
                     "total": (price * qty) + delivery - discount, "status": "pending", "date": str(date.today()), "courier": courier
                 })
                 save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                st.success(f"Order {oid} Saved!")
+                st.success(f"Order {oid} Saved Permanently!")
 
     elif sub == "View Lead":
         st.subheader("📋 Lead List")
-        # Search & Filter
         search_q = st.text_input("🔍 Search by Name or Phone")
-        filter_status = st.multiselect("Filter Status", ["pending", "confirm", "noanswer", "cancel", "fake"], default=["pending", "confirm"])
+        filter_status = st.multiselect("Filter Status", ["pending", "confirm", "noanswer", "cancel", "fake", "shipped", "returned"], default=["pending", "confirm"])
         
         for idx, o in enumerate(st.session_state.orders):
-            if (search_q.lower() in o['name'].lower() or search_q in o['phone']) and (o['status'] in filter_status):
+            if (search_q.lower() in str(o['name']).lower() or search_q in str(o['phone'])) and (o['status'] in filter_status):
                 with st.expander(f"{o['id']} - {o['name']} ({o['status'].upper()})"):
                     st.write(f"📞 {o['phone']} | 📍 {o['addr']}, {o['city']}")
                     cols = st.columns(5)
@@ -187,7 +186,7 @@ elif menu == "🧾 Orders":
     elif sub == "Order Tracking":
         search = st.text_input("Search by Phone Number")
         if search:
-            results = [o for o in st.session_state.orders if search in o['phone']]
+            results = [o for o in st.session_state.orders if search in str(o['phone'])]
             if results: st.table(pd.DataFrame(results))
             else: st.warning("No records found.")
 
@@ -208,16 +207,15 @@ elif menu == "🚚 Shipped Items":
                     <tr><th>Customer Details</th><th>Order Details</th></tr>
                     <tr>
                         <td><b>{ro['name']}</b><br>{ro['addr']}<br>Tel: {ro['phone']}</td>
-                        <td>{ro['prod']} (x{ro['qty']})<br><b>Total: LKR {ro['total']:.2f}</b></td>
+                        <td>{ro['prod']} (x{ro['qty']})<br><b>Total: LKR {float(ro['total']):.2f}</b></td>
                     </tr>
                 </table>
             </div>
             """, unsafe_allow_html=True)
             if st.button(f"Print & Ship {ro['id']}", key=f"p{idx}"):
-                st.session_state.stocks[ro['prod']] -= ro['qty']
+                st.session_state.stocks[ro['prod']] -= int(ro['qty'])
                 for o in st.session_state.orders: 
                     if o['id'] == ro['id']: o['status'] = 'shipped'
-                # ස්ටොක් සහ ඕඩර්ස් සේව් කිරීම
                 save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
                 save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
                 st.components.v1.html("<script>window.print(); setTimeout(()=>window.location.reload(), 1000);</script>")
@@ -227,7 +225,7 @@ elif menu == "🚚 Shipped Items":
         if shipped:
             df_shipped = pd.DataFrame(shipped)
             st.dataframe(df_shipped)
-            st.download_button("📥 Download Shipped List", df_shipped.to_csv().encode('utf-8'), "shipped.csv")
+            st.download_button("📥 Download Shipped List", df_shipped.to_csv(index=False).encode('utf-8'), "shipped.csv")
         else: st.info("No shipped items.")
 
 # --- 9. GRN, EXPENSES & RETURNS ---
@@ -254,7 +252,7 @@ elif menu == "💰 Expense":
             st.session_state.expenses.append({"date": str(date.today()), "cat": cat, "amount": amt})
             save_data(pd.DataFrame(st.session_state.expenses), 'expenses.csv')
             st.success("Expense Logged!")
-    st.table(pd.DataFrame(st.session_state.expenses))
+    if st.session_state.expenses: st.table(pd.DataFrame(st.session_state.expenses))
 
 elif menu == "🔄 Return":
     rid = st.text_input("Enter Order ID to Return (RTS)")
@@ -262,7 +260,7 @@ elif menu == "🔄 Return":
         for o in st.session_state.orders:
             if o['id'] == rid:
                 o['status'] = 'returned'
-                st.session_state.stocks[o['prod']] += o['qty']
+                st.session_state.stocks[o['prod']] += int(o['qty'])
                 save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
                 save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
                 st.success(f"Stock for {rid} Added Back & Status Updated.")
@@ -270,21 +268,22 @@ elif menu == "🔄 Return":
 elif menu == "📊 Stocks":
     df_s = pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Available Qty"])
     st.table(df_s)
-    # Low Stock Highlight in Table
     st.write("**Quick Adjustment**")
     adj_p = st.selectbox("Product to Adjust", list(st.session_state.stocks.keys()))
-    adj_q = st.number_input("New Total Qty", value=st.session_state.stocks[adj_p])
+    adj_q = st.number_input("New Total Qty", value=int(st.session_state.stocks[adj_p]))
     if st.button("Update Stock"):
         st.session_state.stocks[adj_p] = adj_q
         save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
+        st.success("Stock Adjusted!")
         st.rerun()
 
 elif menu == "🛍️ Products":
     with st.form("p"):
         n = st.text_input("New Product Name")
         if st.form_submit_button("Add Product"):
-            if n not in st.session_state.stocks:
+            if n and n not in st.session_state.stocks:
                 st.session_state.stocks[n] = 0
                 save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
-                st.success(f"{n} Added to Inventory!")
-            else: st.warning("Product already exists.")
+                st.success(f"{n} Added to Inventory Permanently!")
+                st.rerun()
+            else: st.warning("Product already exists or name is empty.")
