@@ -5,10 +5,8 @@ import uuid
 import os
 import plotly.express as px
 import plotly.graph_objects as go
-import time
-import re
 
-# --- 0. DATA PERSISTENCE ---
+# --- 0. DATA PERSISTENCE (දත්ත ස්ථීරව තබා ගැනීම) ---
 def save_data(df, filename):
     df.to_csv(filename, index=False)
 
@@ -45,7 +43,7 @@ SL_DATA = {
 }
 
 # --- 1. PAGE CONFIG ---
-st.set_page_config(page_title="Happy Shop | Ultimate Enterprise ERP", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Happy Shop | Full Enterprise ERP", layout="wide", initial_sidebar_state="expanded")
 
 # --- 2. SESSION STATE & DB ---
 if 'orders' not in st.session_state: st.session_state.orders = load_data('orders.csv')
@@ -65,7 +63,7 @@ if 'staff_perms' not in st.session_state:
 
 # --- 3. LOGIN SYSTEM ---
 def check_login(u, p):
-    if u == "happyshop@gmail.com" and p == "happy123":
+    if (u == "admin" and p == "happy123") or (u == "happyshop@gmail.com" and p == "happy123"):
         return True, "Owner", "Admin"
     for i in range(1, 6):
         if u == f"demo{i}@gmail.com" and p == f"demo{i}":
@@ -75,7 +73,7 @@ def check_login(u, p):
 if not st.session_state.authenticated:
     st.markdown("<h2 style='text-align: center; color: #ffa500;'>HAPPY SHOP ENTERPRISE LOGIN</h2>", unsafe_allow_html=True)
     with st.form("login_form"):
-        user_input = st.text_input("Email/Username")
+        user_input = st.text_input("Username / Email")
         pass_input = st.text_input("Password", type="password")
         if st.form_submit_button("Login"):
             auth, role, name = check_login(user_input, pass_input)
@@ -85,174 +83,220 @@ if not st.session_state.authenticated:
                 st.session_state.current_user = name
                 st.rerun()
             else:
-                st.error("Invalid Email or Password")
+                st.error("Invalid Username or Password")
     st.stop()
 
-# --- 4. CSS (Enhanced with Picture Style) ---
+# --- 4. CSS (Enhanced Styling) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0d1117; color: #c9d1d9; }
+    [data-testid="stSidebar"] { background-color: #161b22 !important; }
     .metric-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 25px; }
-    .m-card { padding: 15px; border-radius: 10px; text-align: center; min-width: 140px; color: white; font-weight: bold; }
+    .m-card { padding: 15px; border-radius: 10px; text-align: center; min-width: 130px; color: white; font-weight: bold; }
     .bg-p { background: #6c757d; } .bg-c { background: #28a745; } .bg-n { background: #ffc107; color: black; } 
-    .bg-x { background: #dc3545; } .bg-t { background: #007bff; } .bg-profit { background: #9b59b6; }
-    .val { font-size: 28px; display: block; }
-    .status-bar { display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap; }
-    .status-item { padding: 3px 10px; border-radius: 4px; font-weight: bold; font-size: 11px; color: white; }
+    .bg-x { background: #dc3545; } .bg-f { background: #343a40; } .bg-t { background: #007bff; } .bg-profit { background: #9b59b6; }
+    .val { font-size: 26px; display: block; }
+    .ship-header { background-color: #1f2937; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #374151; }
+    .status-tab { padding: 5px 12px; border-radius: 5px; font-weight: bold; font-size: 11px; margin-right: 5px; color: white; display: inline-block;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 5. SIDEBAR & GHOST SWITCH ---
+# --- 5. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    st.markdown(f"<h1 style='color:#ffa500; font-size: 24px;'>HAPPY SHOP</h1>", unsafe_allow_html=True)
-    st.markdown(f"👤 **{st.session_state.current_user}**")
+    st.markdown(f"<h1 style='color:#ffa500; text-align:center;'>HAPPY SHOP</h1>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:center;'>👤 <b>{st.session_state.current_user}</b> ({st.session_state.user_role})</p>", unsafe_allow_html=True)
     
     if st.session_state.user_role == "Owner":
-        with st.expander("🛠️ Admin Master Controls", expanded=False):
+        with st.expander("🛠️ Admin Controls", expanded=False):
             st.session_state.staff_perms["Add_Order"] = st.checkbox("Staff: Add Leads", value=st.session_state.staff_perms["Add_Order"])
             st.session_state.staff_perms["Print"] = st.checkbox("Staff: Print/Dispatch", value=st.session_state.staff_perms["Print"])
-            st.session_state.staff_perms["Finance"] = st.checkbox("Staff: Finance View", value=st.session_state.staff_perms["Finance"])
             staff_options = ["Admin", "demo1", "demo2", "demo3", "demo4", "demo5"]
-            selected_user = st.selectbox("Ghost Switch User", staff_options, index=staff_options.index(st.session_state.current_user) if st.session_state.current_user in staff_options else 0)
-            if selected_user != st.session_state.current_user:
-                st.session_state.current_user = selected_user
+            ghost_user = st.selectbox("Switch View As:", staff_options, index=staff_options.index(st.session_state.current_user) if st.session_state.current_user in staff_options else 0)
+            if ghost_user != st.session_state.current_user:
+                st.session_state.current_user = ghost_user
                 st.rerun()
 
-    st.markdown("---")
-    menu = st.radio("MAIN NAVIGATION", ["🏠 Dashboard", "📦 GRN", "💸 Expense", "🛒 Orders", "✈️ Shipped Items", "🔄 Return", "📊 Stocks", "🏷️ Products"])
+    menu = st.radio("MAIN NAVIGATION", ["🏠 Dashboard", "🧾 Orders", "🚚 Shipped Items", "📦 GRN", "💰 Expense", "📊 Stocks", "🛍️ Products"])
     
-    if menu == "🛒 Orders":
-        sub = st.selectbox("ORDER OPTIONS", ["New Order", "Pending Orders", "Order Search", "Import Lead", "View Lead", "Add Lead", "Order History", "Exchanging Orders", "Blacklist Manager"])
+    sub = ""
+    if menu == "🧾 Orders": 
+        sub = st.selectbox("Order Menu", ["New Order", "Pending Orders", "Order Search", "Import Lead", "View Lead", "Add Lead", "Order History", "Blacklist Manager"])
+    elif menu == "🚚 Shipped Items": 
+        sub = st.selectbox("Shipping Menu", ["Ship", "Shipped List", "Confirm Dispatch", "Print Dispatch Items", "Search Waybills"])
+    elif menu == "📊 Stocks": sub = st.selectbox("Stock Menu", ["View Stocks", "Adjustment"])
 
-# --- 6. DASHBOARD (Analytics & Profit Added Back) ---
+# --- 6. DASHBOARD ---
 if menu == "🏠 Dashboard":
     st.title("🚀 Business Control Center")
+    df_o = pd.DataFrame(st.session_state.orders)
+    df_e = pd.DataFrame(st.session_state.expenses)
     
-    # පින්තූරයේ තිබූ Analysis දත්ත ගණනය කිරීම
-    df_orders = pd.DataFrame(st.session_state.orders)
-    df_exp = pd.DataFrame(st.session_state.expenses)
-    
-    total_revenue = df_orders[df_orders['status'] == 'confirm']['total'].sum() if not df_orders.empty else 0
-    total_expenses = df_exp['amount'].sum() if not df_exp.empty else 0
-    net_profit = total_revenue - total_expenses
-
-    def get_count(s): return len(df_orders[df_orders['status'] == s]) if not df_orders.empty else 0
+    # Metrics Calculation
+    def get_cnt(s): return len(df_o[df_o['status'] == s]) if not df_o.empty else 0
+    total_rev = df_o[df_o['status'] == 'shipped']['total'].sum() if not df_o.empty else 0
+    total_exp = df_e['amount'].sum() if not df_e.empty else 0
     
     st.markdown(f"""
         <div class="metric-container">
-            <div class="m-card bg-p">PENDING<span class="val">{get_count('pending')}</span></div>
-            <div class="m-card bg-c">CONFIRMED<span class="val">{get_count('confirm')}</span></div>
-            <div class="m-card bg-n">NO ANSWER<span class="val">{get_count('noanswer')}</span></div>
-            <div class="m-card bg-t">TOTAL LEADS<span class="val">{len(df_orders)}</span></div>
-            <div class="m-card bg-x">RETURNS<span class="val">{get_count('return')}</span></div>
-            <div class="m-card bg-profit">PROFIT<span class="val">Rs.{format_currency(net_profit)}</span></div>
+            <div class="m-card bg-p">PENDING<span class="val">{get_cnt('pending')}</span></div>
+            <div class="m-card bg-c">CONFIRMED<span class="val">{get_cnt('confirm')}</span></div>
+            <div class="m-card bg-n">NO ANSWER<span class="val">{get_cnt('noanswer')}</span></div>
+            <div class="m-card bg-x">CANCEL<span class="val">{get_cnt('cancel')}</span></div>
+            <div class="m-card bg-t">TOTAL LEADS<span class="val">{len(df_o)}</span></div>
+            <div class="m-card bg-profit">PROFIT<span class="val">Rs.{format_currency(total_rev - total_exp)}</span></div>
         </div>
     """, unsafe_allow_html=True)
 
-    # ඩෑෂ්බෝඩ් ප්‍රස්ථාර
-    if not df_orders.empty:
+    if not df_o.empty:
         c1, c2 = st.columns(2)
         with c1:
-            fig_status = px.pie(df_orders, names='status', title='Order Status Distribution', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-            st.plotly_chart(fig_status, use_container_width=True)
+            st.plotly_chart(px.pie(df_o, names='dist', title="Sales by District", hole=0.4), use_container_width=True)
         with c2:
-            fig_daily = px.area(df_orders, x='date', title='Order Growth Over Time')
-            st.plotly_chart(fig_daily, use_container_width=True)
+            st.plotly_chart(px.bar(df_o, x='status', color='status', title="Order Status Distribution"), use_container_width=True)
 
-# --- 7. ORDERS MODULE (Detailed Search Filters Added) ---
-elif menu == "🛒 Orders":
-    if sub in ["View Lead", "Order Search", "Pending Orders"]:
-        st.subheader("🔍 Leads Search & Filter")
-        
-        # පින්තූරයේ තිබූ Search Filters (Status, User, Product, Date Range)
-        c1, c2, c3, c4 = st.columns(4)
-        f_status = c1.selectbox("Status", ["Any", "Pending", "Ok", "No Answer", "Rejected", "Cancelled", "On Hold"])
-        f_user = c2.selectbox("User", ["Any", "Admin", "demo1", "demo2", "demo3", "demo4", "demo5"])
-        f_name = c3.text_input("Customer Name", placeholder="Search name...")
-        f_product = c4.selectbox("Product", ["Any"] + list(st.session_state.stocks.keys()))
-        
-        d1, d2 = st.columns(2)
-        start_date = d1.date_input("Start Date", date.today() - timedelta(days=7))
-        end_date = d2.date_input("End Date", date.today())
+# --- 7. ORDERS MODULE ---
+elif menu == "🧾 Orders":
+    if sub in ["New Order", "Add Lead"]:
+        if st.session_state.user_role == "Owner" or st.session_state.staff_perms["Add_Order"]:
+            st.subheader(f"📝 Happy Shop - {sub}")
+            with st.form("full_order", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                with c1:
+                    name = st.text_input("Customer Name *")
+                    phone = st.text_input("Contact Number *")
+                    addr = st.text_area("Address *")
+                    dist = st.selectbox("District", list(SL_DATA.keys()))
+                    city = st.selectbox("City", SL_DATA[dist])
+                with c2:
+                    prod = st.selectbox("Product", list(st.session_state.stocks.keys()))
+                    qty = st.number_input("Qty", min_value=1, value=1)
+                    price = st.number_input("Sale Amount", value=2950.0)
+                    delivery = st.number_input("Delivery Charge", value=350.0)
+                    courier = st.selectbox("Courier", ["Koombiyo", "Domex", "Pronto"])
+                
+                if st.form_submit_button("🚀 SAVE ENTRY"):
+                    oid = f"HS-{uuid.uuid4().hex[:6].upper()}"
+                    st.session_state.orders.append({
+                        "id": oid, "name": name, "phone": phone, "addr": addr, "city": city, "dist": dist,
+                        "pro_code": prod, "qty": qty, "total": (price * qty) + delivery, 
+                        "status": "pending", "date": str(date.today()), "staff": st.session_state.current_user, "courier": courier
+                    })
+                    save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
+                    st.success(f"Order {oid} Saved!")
+        else:
+            st.error("Permission Denied.")
 
-        # පින්තූරයේ තිබූ පාට පාට Status Legend එක
-        st.markdown("""
-            <div class="status-bar">
-                <div class="status-item" style="background:#007bff">Pending | 0</div>
-                <div class="status-item" style="background:#28a745">Ok | 0</div>
-                <div class="status-item" style="background:#ffc107; color:black">No Answer | 0</div>
-                <div class="status-item" style="background:#dc3545">Rejected | 0</div>
-                <div class="status-item" style="background:#6c757d">Cancelled | 0</div>
-                <div class="status-item" style="background:#e74c3c">On Hold | 0</div>
+    elif sub in ["View Lead", "Order Search", "Pending Orders"]:
+        st.markdown('<div class="ship-header"><h3>🔍 Search & Filter Leads</h3>', unsafe_allow_html=True)
+        fc1, fc2, fc3, fc4 = st.columns(4)
+        s_status = fc1.selectbox("Status", ["Any", "pending", "confirm", "noanswer", "rejected", "fake", "cancel"])
+        s_user = fc2.selectbox("User", ["Any", "Admin", "demo1", "demo2", "demo3", "demo4", "demo5"])
+        s_name = fc3.text_input("Search Name/Phone")
+        s_prod = fc4.selectbox("Product", ["Any"] + list(st.session_state.stocks.keys()))
+        
+        if st.button("Apply Filters"): st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Status Tabs
+        def cnt(st_val): return len([o for o in st.session_state.orders if o.get('status') == st_val])
+        st.markdown(f"""
+            <div style="margin-bottom:20px;">
+                <span class="status-tab" style="background:#6c757d;">Pending: {cnt('pending')}</span>
+                <span class="status-tab" style="background:#28a745;">Ok: {cnt('confirm')}</span>
+                <span class="status-tab" style="background:#ffc107; color:black;">No Answer: {cnt('noanswer')}</span>
+                <span class="status-tab" style="background:#dc3545;">Rejected: {cnt('rejected')}</span>
             </div>
         """, unsafe_allow_html=True)
 
         df = pd.DataFrame(st.session_state.orders)
-        # Filter Logic (Applying user filters)
         if not df.empty:
-            if f_status != "Any": df = df[df['status'] == f_status.lower()]
-            if f_user != "Any": df = df[df['staff'] == f_user]
-            if f_name: df = df[df['name'].str.contains(f_name, case=False)]
+            if s_status != "Any": df = df[df['status'] == s_status]
+            if s_user != "Any": df = df[df['staff'] == s_user]
+            if s_name: df = df[df['name'].str.contains(s_name, case=False) | df['phone'].astype(str).str.contains(s_name)]
             
-            # Action Buttons Column (Shopping Cart, Call, Cancel, Edit etc.)
-            st.markdown("### Leads List:")
             for idx, row in df.iterrows():
-                with st.expander(f"📌 {row['id']} | {row['name']} | {row['city']} | Status: {row['status']}"):
-                    # පින්තූරයේ තිබූ Action Icons ටික (Buttons ලෙස)
-                    b1, b2, b3, b4, b5 = st.columns(5)
-                    if b1.button("🛒 Confirm", key=f"conf_{idx}"):
+                with st.expander(f"📌 {row['id']} - {row['name']} ({row['status'].upper()})"):
+                    ac1, ac2, ac3, ac4, ac5 = st.columns(5)
+                    if ac1.button("✅ Confirm", key=f"c_{idx}"):
                         st.session_state.orders[idx]['status'] = 'confirm'
-                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                        st.rerun()
-                    if b2.button("📞 No Answer", key=f"call_{idx}"):
+                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+                    if ac2.button("☎ No Answer", key=f"n_{idx}"):
                         st.session_state.orders[idx]['status'] = 'noanswer'
-                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                        st.rerun()
-                    if b3.button("🚫 Cancel", key=f"canc_{idx}"):
-                        st.session_state.orders[idx]['status'] = 'cancel'
-                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                        st.rerun()
-                    if b4.button("✍️ Edit", key=f"edit_{idx}"): st.info("Edit feature opening...")
-                    if b5.button("🖨️ Print", key=f"prnt_{idx}"): st.success("Printing Waybill...")
+                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+                    if ac3.button("❌ Reject", key=f"r_{idx}"):
+                        st.session_state.orders[idx]['status'] = 'rejected'
+                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+                    if ac4.button("🗑️ Delete", key=f"d_{idx}"):
+                        st.session_state.orders.pop(idx)
+                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+            st.dataframe(df, use_container_width=True)
 
-            st.table(df[['date', 'id', 'name', 'phone', 'city', 'pro_code', 'staff', 'status']])
+# --- 8. SHIPPED ITEMS & LOGISTICS ---
+elif menu == "🚚 Shipped Items":
+    if sub == "Confirm Dispatch":
+        st.subheader("✅ Ready to Dispatch")
+        ready = [o for o in st.session_state.orders if o['status'] == 'confirm']
+        if ready:
+            for idx, o in enumerate(ready):
+                c1, c2 = st.columns([4, 1])
+                c1.write(f"**{o['id']}** | {o['name']} | {o['city']} | {o['pro_code']}")
+                if c2.button("Mark Ready", key=f"rd_{idx}"):
+                    o['status'] = 'ready_print'
+                    save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+        else: st.info("No orders to dispatch.")
 
-    elif sub in ["New Order", "Add Lead"]:
-        # මුල් Code එකේ තිබූ New Order Form එක (එක අකුරක්වත් අයින් නොකර)
-        if st.session_state.user_role == "Owner" or st.session_state.staff_perms["Add_Order"]:
-            st.subheader("➕ Create New Entry")
-            with st.form("entry_form"):
-                c1, c2 = st.columns(2)
-                name = c1.text_input("Customer Name")
-                phone = c1.text_input("Contact Number")
-                addr = c1.text_area("Address")
-                dist = c2.selectbox("District", list(SL_DATA.keys()))
-                city = c2.selectbox("City", SL_DATA[dist])
-                pro_code = c2.text_input("Product Code (Pro Code)")
-                price = c2.number_input("Order Value", value=0)
-                if st.form_submit_button("Save Entry"):
-                    oid = f"HS-{uuid.uuid4().hex[:6].upper()}"
-                    st.session_state.orders.append({
-                        "id": oid, "name": name, "phone": phone, "addr": addr, "dist": dist, "city": city,
-                        "pro_code": pro_code, "total": price, "status": "pending", "date": str(date.today()),
-                        "staff": st.session_state.current_user, "dispatch": "No"
-                    })
-                    save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                    st.success("Saved!")
-        else:
-            st.error("බලතල සීමා කර ඇත.")
+    elif sub == "Print Dispatch Items":
+        to_print = [o for o in st.session_state.orders if o['status'] == 'ready_print']
+        for idx, o in enumerate(to_print):
+            if st.button(f"Print & Ship {o['id']}", key=f"sh_{idx}"):
+                # Deduct Stock
+                if o['pro_code'] in st.session_state.stocks:
+                    st.session_state.stocks[o['pro_code']] -= int(o['qty'])
+                o['status'] = 'shipped'
+                save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
+                save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
+                st.success(f"{o['id']} Shipped!")
+                st.rerun()
 
-# --- 8. REMAINING MODULES (Keep Intact) ---
-elif menu == "📦 GRN": st.title("Good Receive Note")
-elif menu == "💸 Expense": st.title("Expense Tracking")
+# --- 9. GRN, EXPENSES & STOCKS ---
+elif menu == "📦 GRN":
+    st.subheader("📦 Goods Receive Note")
+    with st.form("grn"):
+        p = st.selectbox("Product", list(st.session_state.stocks.keys()))
+        q = st.number_input("Received Qty", min_value=1)
+        if st.form_submit_button("Update Stock"):
+            st.session_state.stocks[p] += q
+            st.session_state.grn_history.append({"date": str(date.today()), "prod": p, "qty": q})
+            save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
+            save_data(pd.DataFrame(st.session_state.grn_history), 'grn.csv')
+            st.success("Inventory Updated!")
+
+elif menu == "💰 Expense":
+    st.subheader("💰 Expense Tracking")
+    with st.form("exp"):
+        cat = st.selectbox("Category", ["Marketing", "Salary", "Rent", "Courier"])
+        amt = st.number_input("Amount", min_value=0.0)
+        if st.form_submit_button("Log Expense"):
+            st.session_state.expenses.append({"date": str(date.today()), "cat": cat, "amount": amt})
+            save_data(pd.DataFrame(st.session_state.expenses), 'expenses.csv')
+            st.success("Expense Saved!")
+    st.table(pd.DataFrame(st.session_state.expenses))
+
 elif menu == "📊 Stocks":
-    st.title("Stock Inventory")
-    st.table(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]))
-elif menu == "✈️ Shipped Items": st.title("Dispatched Orders")
-elif menu == "🔄 Return": st.title("Returns Management")
-elif menu == "🏷️ Products": st.title("Product Master")
+    st.subheader("📈 Inventory Level")
+    st.table(pd.DataFrame(st.session_state.stocks.items(), columns=["Product Name", "Available Qty"]))
 
-# --- FOOTER & LOGOUT ---
+elif menu == "🛍️ Products":
+    st.subheader("🛍️ Product Management")
+    with st.form("new_p"):
+        np = st.text_input("Product Name")
+        if st.form_submit_button("Add Product"):
+            if np and np not in st.session_state.stocks:
+                st.session_state.stocks[np] = 0
+                save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
+                st.rerun()
+
+# --- FOOTER ---
 st.sidebar.markdown("---")
 if st.sidebar.button("🔓 Logout"):
     st.session_state.authenticated = False
