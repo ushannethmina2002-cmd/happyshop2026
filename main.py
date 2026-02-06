@@ -202,17 +202,17 @@ elif menu == "🧾 Orders":
 
     elif sub == "View Lead":
         st.markdown('<div class="ship-header"><h3>🔍 Leads Search</h3>', unsafe_allow_html=True)
-        fc1, fc2, fc3 = st.columns(3)
-        s_status = fc1.selectbox("Status Filter", ["Any", "pending", "confirm", "noanswer", "cancel", "fake", "onhold"])
-        s_user = fc2.selectbox("User Filter", ["Any", "Admin", "Staff 01"])
-        s_name = fc3.text_input("Customer Name/Phone Search")
-        
-        fc4, fc5, fc6 = st.columns(3)
+        # ඡායාරූපයට අනුව Search පේළිය
+        fc1, fc2, fc3, fc4, fc5 = st.columns(5)
+        s_status = fc1.selectbox("Status", ["Any", "pending", "confirm", "noanswer", "rejected", "fake", "cancelled", "onhold", "deleted"])
+        s_user = fc2.selectbox("User", ["Any", "Admin", "Staff 01", "Crown Dimo 3"])
+        s_name = fc3.text_input("Customer Name")
         s_start = fc4.date_input("Start Date", date.today())
         s_end = fc5.date_input("End Date", date.today())
-        s_product = fc6.selectbox("Product Filter", ["Any"] + list(st.session_state.stocks.keys()))
         
-        if st.button("Apply Search Filters"):
+        fc6, fc7 = st.columns([1, 4])
+        s_product = fc6.selectbox("Product", ["Any"] + list(st.session_state.stocks.keys()))
+        if fc7.button("Search", type="primary"):
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -222,11 +222,13 @@ elif menu == "🧾 Orders":
             <div style="display:flex; flex-wrap:wrap; margin-bottom:20px;">
                 <span class="status-tab" style="background:#4b5563;">Leads List: {len(st.session_state.orders)}</span>
                 <span class="status-tab" style="background:#6c757d;">Pending: {cnt('pending')}</span>
-                <span class="status-tab" style="background:#28a745;">Confirmed: {cnt('confirm')}</span>
+                <span class="status-tab" style="background:#28a745;">Ok: {cnt('confirm')}</span>
                 <span class="status-tab" style="background:#ffc107; color:black;">No Answer: {cnt('noanswer')}</span>
-                <span class="status-tab" style="background:#dc3545;">Cancelled: {cnt('cancel')}</span>
+                <span class="status-tab" style="background:#dc3545;">Rejected: {cnt('rejected')}</span>
                 <span class="status-tab" style="background:#343a40;">Fake: {cnt('fake')}</span>
+                <span class="status-tab" style="background:#dc3545;">Cancelled: {cnt('cancelled')}</span>
                 <span class="status-tab" style="background:#d97706;">On Hold: {cnt('onhold')}</span>
+                <span class="status-tab" style="background:#374151;">Deleted: {cnt('deleted')}</span>
             </div>
         """, unsafe_allow_html=True)
 
@@ -246,119 +248,95 @@ elif menu == "🧾 Orders":
                 table_data.append({
                     "Lead Date": o.get('date'),
                     "Customer Name": o.get('name'),
-                    "Address": o.get('addr'),
+                    "Customer Address": o.get('addr'),
                     "Contact #1": o.get('phone'),
-                    "Product Code": o.get('prod'),
+                    "Pro Code": o.get('prod'),
                     "Staff": o.get('user', 'Admin'),
-                    "Status": o.get('status').upper(),
-                    "Action": "Edit Below"
+                    "Status": o.get('status').upper()
                 })
             st.table(pd.DataFrame(table_data))
 
-            st.write("### 🛠️ Lead Management Panel")
+            st.write("### 🛠️ Quick Actions")
             for idx, o in enumerate(filtered_orders):
-                with st.expander(f"ACTION: {o['id']} - {o['name']} ({o['phone']})"):
-                    # පාරිභෝගිකයාගේ දත්ත ඇමතුමක් අතරතුර පහසුවෙන් වෙනස් කිරීමට
-                    uc1, uc2 = st.columns(2)
-                    new_name = uc1.text_input("Edit Name", value=o['name'], key=f"name_{idx}")
-                    new_phone = uc1.text_input("Edit Phone", value=o['phone'], key=f"phone_{idx}")
-                    new_addr = uc1.text_area("Edit Address", value=o['addr'], key=f"addr_{idx}")
-                    
-                    new_prod = uc2.selectbox("Edit Product", list(st.session_state.stocks.keys()), index=list(st.session_state.stocks.keys()).index(o['prod']), key=f"prod_{idx}")
-                    new_qty = uc2.number_input("Edit Qty", value=int(o['qty']), key=f"qty_{idx}")
-                    new_total = uc2.number_input("Edit Total Amount", value=float(o['total']), key=f"total_{idx}")
-
-                    if st.button("Update Info 💾", key=f"save_{idx}"):
-                        o['name'] = new_name
-                        o['phone'] = new_phone
-                        o['addr'] = new_addr
-                        o['prod'] = new_prod
-                        o['qty'] = new_qty
-                        o['total'] = new_total
-                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                        st.success("Updated!")
-                        st.rerun()
-
-                    st.write("---")
-                    # Actions as requested in Photo: Confirm, No Answer, Cancel, Fake, Delete + Add Order
+                with st.expander(f"Action: {o['id']} - {o['name']}"):
                     acols = st.columns(6)
                     if acols[0].button("Confirm ✅", key=f"c{idx}"): 
-                        o['status'] = 'confirm'
-                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+                        o['status'] = 'confirm'; save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
                     if acols[1].button("No Answer ☎", key=f"n{idx}"): 
-                        o['status'] = 'noanswer'
-                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
-                    if acols[2].button("Cancel ❌", key=f"x{idx}"): 
-                        o['status'] = 'cancel'
-                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+                        o['status'] = 'noanswer'; save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+                    if acols[2].button("Rejected ❌", key=f"r{idx}"): 
+                        o['status'] = 'rejected'; save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
                     if acols[3].button("Fake ⚠️", key=f"f{idx}"): 
-                        o['status'] = 'fake'
-                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+                        o['status'] = 'fake'; save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
                     if acols[4].button("Delete 🗑️", key=f"d{idx}"): 
-                        st.session_state.orders.remove(o)
-                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+                        o['status'] = 'deleted'; save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
                     if acols[5].button("Add Order ➕", key=f"ao{idx}"):
-                        # පවතින Lead එක අලුත් Order එකක් ලෙස පිටපත් කිරීම
-                        new_o = o.copy()
-                        new_o['id'] = f"HS-{uuid.uuid4().hex[:6].upper()}"
-                        new_o['status'] = 'pending'
-                        st.session_state.orders.append(new_o)
-                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                        st.success("New Order Added from this Lead!")
-        else:
-            st.info("No leads found.")
+                        st.success("Proceeding to create order from lead...")
 
-    elif sub in ["Order Search", "Order Tracking"]:
-        search = st.text_input("Search by Phone Number")
-        if search:
-            results = [o for o in st.session_state.orders if search in str(o['phone'])]
-            if results: st.table(pd.DataFrame(results))
-            else: st.warning("No records found.")
+    elif sub == "Pending Orders":
+        st.subheader("⏳ Pending Orders")
+        pending = [o for o in st.session_state.orders if o['status'] == 'pending']
+        if pending: st.table(pd.DataFrame(pending))
+        else: st.info("No pending orders.")
 
 # --- 8. SHIPPED ITEMS ---
 elif menu == "🚚 Shipped Items":
     if sub in ["Ship", "Shipping Dashboard"]:
         st.markdown('<div class="ship-header"><h3>🔍 Search orders for shipping</h3>', unsafe_allow_html=True)
+        # ඡායාරූපයට අනුව Shipping Search පේළිය
         c1, c2, c3, c4 = st.columns(4)
-        c1.selectbox("User Search", ["Any", "Admin"])
-        c2.selectbox("Date Range Filter", ["Disable", "Today", "Last 7 Days"])
-        c3.selectbox("Courier Company", ["All", "Koombiyo", "Domex", "Pronto", "Royal Express"])
-        c4.selectbox("Type", ["Only Company Orders"])
-        st.button("Search Orders to Ship")
+        f_user = c1.selectbox("User", ["Any", "Admin", "Staff"])
+        f_range = c2.selectbox("Date Range", ["Disable", "Today", "Yesterday", "Last 7 Days"])
+        f_courier = c3.selectbox("Courier", ["All", "Koombiyo", "Domex", "Pronto", "Royal Express"])
+        f_drop = c4.selectbox("Dropshipper", ["Only Company Orders", "All"])
         
+        st.button("Search Orders")
+        
+        # Summary Row
         ready_orders = [o for o in st.session_state.orders if o['status'] in ['confirm', 'ready_print']]
-        st.info(f"{len(ready_orders)} items have to ship")
+        st.markdown(f"**{len(ready_orders)} Items have to ship** | **Total: {len(st.session_state.orders)}**")
         st.markdown('</div>', unsafe_allow_html=True)
         
+        # Ready to Ship Table (ඡායාරූපයට අනුව)
         if ready_orders:
             df_ready = pd.DataFrame(ready_orders)
-            st.dataframe(df_ready[['date', 'id', 'prod', 'qty', 'name', 'city', 'phone', 'status']], use_container_width=True)
+            st.write("#### Ready to Ship List")
+            st.dataframe(df_ready[['date', 'id', 'prod', 'qty', 'name', 'addr', 'city', 'phone', 'status']], use_container_width=True)
 
     elif sub == "Confirm Dispatch":
-        st.subheader("✅ Confirm Orders for Dispatch")
+        st.subheader("✅ Confirm Dispatch")
         ready_to_confirm = [o for o in st.session_state.orders if o['status'] == 'confirm']
-        if not ready_to_confirm:
-            st.info("No orders waiting for dispatch confirmation.")
-        else:
+        if ready_to_confirm:
             for idx, o in enumerate(ready_to_confirm):
                 col1, col2 = st.columns([4, 1])
-                col1.write(f"**{o['id']}** - {o['name']} | {o['city']} | {o['prod']} (x{o['qty']})")
+                col1.write(f"**{o['id']}** - {o['name']} | {o['city']} | {o['prod']}")
                 if col2.button("Ready to Print", key=f"conf_{idx}"):
                     o['status'] = 'ready_print'
                     save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
                     st.rerun()
+        else:
+            st.info("No confirmed orders waiting for dispatch.")
 
-    elif sub in ["Print Dispatch Items", "Dispatch & Print"]:
-        st.subheader("🖨️ Dispatch & Print Label")
+    elif sub == "Print Dispatch Items":
+        st.subheader("🖨️ Print Dispatch Items")
         to_print = [o for o in st.session_state.orders if o['status'] == 'ready_print']
-        for idx, ro in enumerate(to_print):
-            st.markdown(f"**{ro['id']}** - {ro['name']}")
-            if st.button(f"Print & Ship {ro['id']}", key=f"p_{idx}"):
-                st.session_state.stocks[ro['prod']] -= int(ro['qty'])
-                ro['status'] = 'shipped'
-                save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
-                st.success(f"{ro['id']} moved to Shipped.")
+        if to_print:
+            for idx, ro in enumerate(to_print):
+                st.markdown(f"**{ro['id']}** - {ro['name']}")
+                if st.button(f"Mark as Shipped {ro['id']}", key=f"p_{idx}"):
+                    st.session_state.stocks[ro['prod']] -= int(ro['qty'])
+                    ro['status'] = 'shipped'
+                    save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
+                    save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
+                    st.success(f"{ro['id']} Shipped!")
+                    st.rerun()
+
+    elif sub == "Search Waybills":
+        st.subheader("🔍 Search Waybills")
+        wb_search = st.text_input("Enter Phone or Waybill Number")
+        if wb_search:
+            res = [o for o in st.session_state.orders if wb_search in str(o['phone']) or wb_search in o['id']]
+            if res: st.table(pd.DataFrame(res))
 
 # --- 9. GRN, EXPENSES & STOCKS ---
 elif menu == "📦 GRN":
