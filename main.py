@@ -2,178 +2,178 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 
-# --- 1. PAGE CONFIGURATION ---
+# --- 1. PAGE SETUP ---
 st.set_page_config(page_title="Happy Shop | Ultimate ERP", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. SESSION STATE ---
+# --- 2. SESSION STATE (Data Stability) ---
 if 'orders' not in st.session_state:
     st.session_state.orders = []
 
-# --- 3. DISTRICTS & CITIES (ලංකාවේ දත්ත) ---
-districts = ["Ampara", "Anuradhapura", "Badulla", "Batticaloa", "Colombo", "Galle", "Gampaha", "Hambantota", "Jaffna", "Kalutara", "Kandy", "Kegalle", "Kilinochchi", "Kurunegala", "Mannar", "Matale", "Matara", "Moneragala", "Mullaitivu", "Nuwara Eliya", "Polonnaruwa", "Puttalam", "Ratnapura", "Trincomalee", "Vavuniya"]
-cities = ["Colombo 01-15", "Dehiwala", "Mount Lavinia", "Nugegoda", "Maharagama", "Kottawa", "Pannipitiya", "Gampaha", "Negombo", "Kadawatha", "Kiribathgoda", "Wattala", "Ja-Ela", "Kandy", "Peradeniya", "Katugastota", "Galle", "Matara", "Kurunegala", "Ratnapura", "Kalutara", "Panadura", "Horana"]
-
-# --- 4. PROFESSIONAL CSS & PRINTING ---
+# --- 3. UI & PRINT STYLING (CSS) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #0b0e14; color: #e1e1e1; }
+    .stApp { background-color: #0d1117; color: #c9d1d9; }
     [data-testid="stSidebar"] { background-color: #161b22 !important; }
     
-    /* Metrics */
-    .metric-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 25px; }
-    .m-card { padding: 12px; border-radius: 10px; text-align: center; min-width: 120px; color: white; font-weight: bold; }
-    .bg-pending { background: #6c757d; } .bg-confirm { background: #28a745; } 
-    .bg-noanswer { background: #ffc107; color: black; } .bg-cancel { background: #dc3545; } 
-    .bg-fake { background: #343a40; } .bg-total { background: #007bff; }
-    .val { font-size: 24px; display: block; }
+    /* Metrics Layout */
+    .metric-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
+    .m-box { padding: 15px; border-radius: 10px; text-align: center; min-width: 130px; color: white; font-weight: bold; }
+    .bg-p { background: #6e7681; } .bg-c { background: #238636; } .bg-n { background: #d29922; color: black; } 
+    .bg-x { background: #da3633; } .bg-f { background: #30363d; } .bg-t { background: #1f6feb; }
+    .val { font-size: 26px; display: block; }
 
-    /* WAYBILL DESIGN (පින්තූරයේ පරිදිම) */
+    /* HERBAL CROWN WAYBILL DESIGN */
     @media print {
         body * { visibility: hidden; }
-        .print-area, .print-area * { visibility: visible; }
-        .print-area { position: absolute; left: 0; top: 0; width: 380px; color: black !important; background: white !important; padding: 15px; border: 2px solid black; font-family: 'Inter', sans-serif; }
-        .waybill-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .waybill-table td, .waybill-table th { border: 1px solid black; padding: 6px; font-size: 13px; text-align: left; }
+        .print-container, .print-container * { visibility: visible; }
+        .print-container { 
+            position: absolute; left: 0; top: 0; width: 500px; 
+            color: black !important; background: white !important; 
+            padding: 20px; border: 1.5px solid black; font-family: 'Courier New', Courier, monospace;
+        }
+        .bill-table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+        .bill-table td, .bill-table th { border: 1px solid black; padding: 5px; font-size: 14px; text-align: left; }
+        .barcode-area { text-align: center; padding: 15px 0; border-bottom: 1px solid black; }
+        .barcode-text { font-size: 45px; letter-spacing: 5px; margin: 0; }
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 5. SIDEBAR NAVIGATION ---
+# --- 4. NAVIGATION (සියලුම පින්තූරවල තිබූ මෙනූ) ---
 with st.sidebar:
-    st.markdown("<h1 style='color:#ffa500; text-align:center;'>HAPPY SHOP</h1>", unsafe_allow_html=True)
-    menu = st.selectbox("MAIN NAVIGATION", ["🏠 Dashboard", "🧾 Orders", "🚚 Shipped & Prints", "📦 GRN", "💰 Expense", "📊 Stocks"])
-    sub_menu = "View Lead"
-    if menu == "🧾 Orders":
-        sub_menu = st.radio("Actions", ["New Order", "View Lead", "Order Tracking", "Add Lead"])
-    elif menu == "🚚 Shipped & Prints":
-        sub_menu = st.radio("Actions", ["Dispatch & Print", "Shipped List"])
+    st.image("https://cdn-icons-png.flaticon.com/512/3081/3081559.png", width=50)
+    st.markdown("<h2 style='color:#ffa500;'>HAPPY SHOP</h2>", unsafe_allow_html=True)
+    menu = st.selectbox("MAIN MENU", ["🏠 Dashboard", "🧾 Orders", "🚚 Shipped Items", "📦 GRN", "💰 Expense", "🔄 Return", "📊 Stocks", "🛍️ Products"])
+    
+    # Sub-menus Based on Uploaded Images
+    sub = ""
+    if menu == "🧾 Orders": sub = st.radio("Actions", ["New Order", "View Lead", "Order Search", "Add Lead", "Blacklist"])
+    elif menu == "🚚 Shipped Items": sub = st.radio("Actions", ["Ship & Print", "Shipped List", "Delivery Summary"])
+    elif menu == "📦 GRN": sub = st.radio("Actions", ["New GRN", "GRN List", "Packing"])
+    elif menu == "💰 Expense": sub = st.radio("Actions", ["New Expense", "View Expenses"])
+    elif menu == "📊 Stocks": sub = st.radio("Actions", ["View Stocks", "Stock Adjustment", "Add Waste"])
+    elif menu == "🛍️ Products": sub = st.radio("Actions", ["Create Product", "View Products"])
 
-# --- 6. TOP METRIC CARDS ---
-def get_count(s): return len([o for o in st.session_state.orders if o['status'] == s])
-if menu == "🏠 Dashboard" or "Lead" in sub_menu or "Order" in sub_menu:
+# --- 5. TOP SUMMARY CARDS ---
+def get_count(status): return len([o for o in st.session_state.orders if o.get('status') == status])
+
+if menu in ["🏠 Dashboard", "🧾 Orders"]:
     st.markdown(f"""
-        <div class="metric-container">
-            <div class="m-card bg-pending">PENDING<span class="val">{get_count('pending')}</span></div>
-            <div class="m-card bg-confirm">CONFIRMED<span class="val">{get_count('confirm')}</span></div>
-            <div class="m-card bg-noanswer">NO ANSWER<span class="val">{get_count('noanswer')}</span></div>
-            <div class="m-card bg-cancel">CANCEL<span class="val">{get_count('cancel')}</span></div>
-            <div class="m-card bg-fake">FAKE<span class="val">{get_count('fake')}</span></div>
-            <div class="m-card bg-total">TOTAL<span class="val">{len(st.session_state.orders)}</span></div>
+        <div class="metric-row">
+            <div class="m-box bg-p">PENDING<span class="val">{get_count('pending')}</span></div>
+            <div class="m-box bg-c">CONFIRMED<span class="val">{get_count('confirm')}</span></div>
+            <div class="m-box bg-n">NO ANSWER<span class="val">{get_count('noanswer')}</span></div>
+            <div class="m-box bg-x">CANCEL/HOLD<span class="val">{get_count('cancel')}</span></div>
+            <div class="m-box bg-f">FAKE<span class="val">{get_count('fake')}</span></div>
+            <div class="m-box bg-t">TOTAL<span class="val">{len(st.session_state.orders)}</span></div>
         </div>
     """, unsafe_allow_html=True)
 
-# --- 7. NEW ORDER / ADD LEAD (සම්පූර්ණ විස්තර සහිත පෝරමය) ---
-if sub_menu in ["New Order", "Add Lead"]:
+# --- 6. CORE FUNCTIONALITY ---
+
+# 6.1 NEW ORDER (උඹේ පින්තූරෙ තිබුණු ඔක්කොම Fields එක්ක)
+if sub in ["New Order", "Add Lead"]:
     st.subheader("📝 Customer & Order Entry Form")
-    with st.form("full_order_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
+    with st.form("main_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
             name = st.text_input("Customer Name *")
+            addr = st.text_area("Address *")
+            city = st.selectbox("City", ["Colombo", "Kandy", "Galle", "Gampaha", "Other"])
             phone1 = st.text_input("Contact Number 1 *")
             phone2 = st.text_input("Contact Number 2")
-            address = st.text_area("Address *")
-            district = st.selectbox("District *", sorted(districts))
-            city = st.selectbox("City *", sorted(cities))
-        with col2:
-            email = st.text_input("Email")
-            prod = st.selectbox("Product", ["Kesharaja Hair Oil", "Crown 1", "Kalkaya"])
+            source = st.selectbox("Order Source", ["Facebook", "WhatsApp", "TikTok"])
+        with c2:
+            prod = st.selectbox("Product", ["Kesharaja Hair Oil [VGLS0005]", "Herbal Crown 1", "Kalkaya"])
             qty = st.number_input("Qty", min_value=1, value=1)
             price = st.number_input("Sale Amount", value=2950.0)
+            weight = st.number_input("Pkg Weight(kgs)", value=0.5)
             delivery = st.number_input("Delivery Charge", value=350.0)
-            discount = st.number_input("Discount", value=0.0)
+            discount = st.number_input("Discount (-)", value=0.0)
             courier = st.selectbox("Courier Company", ["Koombiyo", "Domex", "Pronto"])
-            source = st.selectbox("Order Source", ["Facebook", "WhatsApp", "TikTok"])
-            note = st.text_area("Order Note")
         
-        if st.form_submit_button("🚀 SAVE RECORD"):
-            if name and phone1 and address:
+        if st.form_submit_button("💾 SAVE ORDER"):
+            if name and phone1:
+                order_id = f"{len(st.session_state.orders) + 1574392}"
                 st.session_state.orders.append({
-                    "id": f"HS-{len(st.session_state.orders)+821380}",
-                    "name": name, "phone1": phone1, "phone2": phone2, "addr": address, 
-                    "dist": district, "city": city, "prod": prod, "qty": qty, 
-                    "total": (price * qty) + delivery - discount, "status": "pending",
-                    "courier": courier, "date": str(date.today())
+                    "id": order_id, "name": name, "phone": phone1, "addr": addr, "city": city,
+                    "prod": prod, "qty": qty, "price": price, "delivery": delivery, 
+                    "discount": discount, "total": (price * qty) + delivery - discount,
+                    "status": "pending", "date": str(date.today()), "courier": courier
                 })
-                st.success("Record Saved!")
+                st.success("Lead Added Successfully!")
                 st.rerun()
 
-# --- 8. VIEW LEAD (බටන් ඔක්කොම සහිතව) ---
-elif sub_menu == "View Lead":
+# 6.2 VIEW LEAD (Fake Button එක සහ Error එක Fix කරලා)
+elif sub == "View Lead":
     st.subheader("📋 Leads Management Table")
     if not st.session_state.orders:
-        st.write("No leads found.")
+        st.info("No orders found.")
     else:
         for idx, o in enumerate(st.session_state.orders):
-            with st.expander(f"{o['id']} - {o['name']} ({o['status'].upper()})"):
-                st.write(f"📞 {o['phone1']} | 📍 {o['addr']}, {o['city']}")
-                c1, c2, c3, c4, c5 = st.columns(5)
-                if c1.button("Confirm ✅", key=f"c_{idx}"): st.session_state.orders[idx]['status'] = 'confirm'; st.rerun()
-                if c2.button("No Answer ☎", key=f"n_{idx}"): st.session_state.orders[idx]['status'] = 'noanswer'; st.rerun()
-                if c3.button("Cancel ❌", key=f"x_{idx}"): st.session_state.orders[idx]['status'] = 'cancel'; st.rerun()
-                if c4.button("Fake ⚠", key=f"f_{idx}"): st.session_state.orders[idx]['status'] = 'fake'; st.rerun()
-                if c5.button("Dispatch 🚚", key=f"d_{idx}"): st.session_state.orders[idx]['status'] = 'confirm'; st.rerun()
+            # KeyError වැළැක්වීමට safe get පාවිච්චි කළා
+            with st.expander(f"Order: {o.get('id', 'N/A')} - {o.get('name', 'Customer')}"):
+                st.write(f"📞 {o.get('phone')} | 💰 LKR {o.get('total')}")
+                cols = st.columns(5)
+                if cols[0].button("Confirm ✅", key=f"c_{idx}"): st.session_state.orders[idx]['status'] = 'confirm'; st.rerun()
+                if cols[1].button("No Answer ☎", key=f"n_{idx}"): st.session_state.orders[idx]['status'] = 'noanswer'; st.rerun()
+                if cols[2].button("Cancel ❌", key=f"x_{idx}"): st.session_state.orders[idx]['status'] = 'cancel'; st.rerun()
+                if cols[3].button("Fake ⚠", key=f"f_{idx}"): st.session_state.orders[idx]['status'] = 'fake'; st.rerun()
+                if cols[4].button("Ship 🚚", key=f"s_{idx}"): st.session_state.orders[idx]['status'] = 'confirm'; st.rerun()
 
-# --- 9. DISPATCH & WAYBILL (HERBAL CROWN Pvt Ltd Design) ---
-elif sub_menu == "Dispatch & Print":
-    st.subheader("🚚 Waybill Printing")
-    confirm_orders = [o for o in st.session_state.orders if o['status'] == 'confirm']
+# 6.3 SHIP & PRINT (පින්තූරයේ පරිදිම Herbal Crown Waybill)
+elif sub == "Ship & Print":
+    st.subheader("🚚 Dispatch & Waybill Printing")
+    to_ship = [o for o in st.session_state.orders if o['status'] == 'confirm']
     
-    if not confirm_orders:
-        st.warning("No confirmed orders to print.")
-    else:
-        for idx, co in enumerate(confirm_orders):
-            st.info(f"Ready: {co['id']} - {co['name']}")
-            
-            # පින්තූරයේ තිබූ ආකාරයටම බිල් එකේ ලේඅවුට් එක
-            bill_html = f"""
-            <div class="print-area">
-                <div style="text-align:center; border-bottom: 2px solid black; padding-bottom:5px;">
-                    <h2 style="margin:0;">Herbal Crown Pvt Ltd</h2>
-                    <p style="font-size:11px; margin:0;">0766066789 | Quality Herbal Care</p>
+    for idx, o in enumerate(to_ship):
+        # පින්තූරය c54e37... හි ඇති ආකාරයටම ඩිසයින් එක
+        st.markdown(f"""
+        <div class="print-container">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="margin:0;">Herbal Crown Pvt Ltd</h2>
+                <div style="text-align:right; font-size:13px;">
+                    Date: {o['date']}<br>ID: {o['id']}
                 </div>
-                <table class="waybill-table">
-                    <tr><td><b>Date:</b> {co['date']}</td><td><b>Order ID:</b> {co['id']}</td></tr>
-                    <tr><td><b>Courier:</b> {co['courier']}</td><td><b>Status:</b> CONFIRM</td></tr>
-                </table>
-                <div style="text-align:center; padding:10px;">
-                    <p style="font-size:30px; letter-spacing:8px; margin:0;">|||||||||||||||||</p>
-                    <p style="font-size:11px; margin:0;">(01) {co['id']} (21) 567512</p>
-                </div>
-                <table class="waybill-table">
-                    <tr><th style="width:55%;">Customer Details</th><th>Payment Summary</th></tr>
-                    <tr>
-                        <td>
-                            <b>{co['name']}</b><br>
-                            {co['addr']}<br>
-                            {co['city']}, {co['dist']}<br>
-                            <b>Tel:</b> {co['phone1']}
-                        </td>
-                        <td>
-                            Item: {co['prod']}<br>
-                            Qty: {co['qty']}<br><br>
-                            <b style="font-size:15px;">TOTAL: LKR {co['total']:.2f}</b>
-                        </td>
-                    </tr>
-                </table>
-                <p style="font-size:10px; text-align:center; margin-top:10px;">Thank You for Shopping with Happy Shop!</p>
             </div>
-            """
-            st.markdown(bill_html, unsafe_allow_html=True)
-            
-            if st.button(f"Print & Dispatch {co['id']}", key=f"p_{idx}"):
-                for order in st.session_state.orders:
-                    if order['id'] == co['id']: order['status'] = 'shipped'
-                st.components.v1.html("<script>window.print();</script>", height=0)
-                st.rerun()
+            <p style="margin:0; font-size:13px;">TP: 0766066789</p>
+            <div class="barcode-area">
+                <p class="barcode-text">|||||||||||||||||||||</p>
+                <p style="margin:0; font-size:12px;">RA02989179</p>
+            </div>
+            <div style="padding:10px 0; font-weight:bold; border-bottom:1px solid black;">
+                {o['prod']} x {o['qty']}
+            </div>
+            <table class="bill-table">
+                <tr><th style="width:55%;">Customer Details</th><th colspan="2">Order Summary</th></tr>
+                <tr>
+                    <td rowspan="4">
+                        <b>Name:</b> {o['name']}<br>
+                        <b>Addr:</b> {o['addr']}<br>
+                        <b>City:</b> {o['city']}<br>
+                        <b>Contacts:</b> {o['phone']}
+                    </td>
+                    <td>Order Total</td><td>{o['price']:.2f}</td>
+                </tr>
+                <tr><td>Delivery Cost</td><td>{o['delivery']:.2f}</td></tr>
+                <tr><td>Discount (-)</td><td>{o['discount']:.2f}</td></tr>
+                <tr><td>Paid (-)</td><td>0.00</td></tr>
+                <tr style="background:#f0f0f0;">
+                    <th colspan="1">Grand Total</th>
+                    <th colspan="2" style="text-align:right;">LKR {o['total']:.2f}</th>
+                </tr>
+            </table>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button(f"Print & Ship {o['id']}", key=f"prnt_{idx}"):
+            st.components.v1.html("<script>window.print();</script>", height=0)
+            # Shipped වලට මාරු කිරීම
+            for order in st.session_state.orders:
+                if order['id'] == o['id']: order['status'] = 'shipped'
+            st.rerun()
 
-# --- 10. SEARCH & TRACKING ---
-elif sub_menu == "Order Tracking":
-    st.subheader("🔍 Order Tracking")
-    q = st.text_input("Enter Phone Number to track")
-    if q:
-        res = [o for o in st.session_state.orders if q in o['phone1']]
-        if res:
-            for o in res:
-                st.info(f"Order {o['id']} Status: {o['status'].upper()}")
-                st.toast(f"Status Updated: {o['status'].upper()}")
-        else: st.error("No order found.")
+# --- 7. OTHER SECTIONS ---
+else:
+    st.title(f"{menu} > {sub}")
+    st.info("මෙම අංශය සඳහා දත්ත ඇතුළත් කරමින් පවතී. (GRN / Stocks / Expense)")
