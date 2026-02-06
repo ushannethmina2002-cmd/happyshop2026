@@ -6,75 +6,70 @@ from datetime import datetime
 st.set_page_config(
     page_title="HappyShop Official ERP",
     page_icon="🛒",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# --- 2. CSS & HTML (උඹ එවපු Side Menu Layout එක) ---
+# --- 2. CSS: උඹ එවපු HTML මෙනු එකේ පෙනුම ලබා ගැනීමට ---
 st.markdown("""
     <style>
-    /* මුළු පසුබිම */
-    .stApp { background-color: #f8f9fa; color: #333; }
+    /* මුළු App එකේ පසුබිම */
+    .stApp { background-color: #f4f4f4; color: #333; }
 
-    /* --- TOP BAR --- */
-    .top-bar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        background: #ffffff;
-        padding: 12px 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        display: flex;
-        align-items: center;
-        z-index: 999;
-    }
-
-    .menu-btn {
-        font-size: 26px;
-        cursor: pointer;
-        margin-right: 15px;
-        color: #333;
-    }
-
-    .brand-name {
-        font-weight: bold;
-        font-size: 20px;
-        color: #333;
-    }
-
-    /* --- CUSTOM SIDE MENU (උඹ එවපු විදිහටම) --- */
-    /* Streamlit Sidebar එක වෙනුවට මේක පාවිච්චි කරමු */
-    [data-testid="stSidebar"] {
-        background-color: #ffffff !important;
-        border-right: 1px solid #eee;
+    /* --- TOP BAR (කළු පාට) --- */
+    header[data-testid="stHeader"] {
+        background-color: #111111 !important;
+        color: white !important;
     }
     
-    [data-testid="stSidebar"] * {
-        color: #333 !important;
+    /* Hamburger Icon එක සුදු කිරීම */
+    [data-testid="stHeader"] button svg {
+        fill: white !important;
     }
 
-    /* කොටු ලස්සන කිරීම */
+    /* --- SIDEBAR (තද කළු පාට) --- */
+    [data-testid="stSidebar"] {
+        background-color: #0f0f0f !important;
+        color: white !important;
+        border-right: 1px solid #222;
+    }
+
+    /* Sidebar අකුරු සහ අයිකන් සුදු කිරීම */
+    [data-testid="stSidebar"] * {
+        color: white !important;
+    }
+
+    /* Sidebar Header (Sandun) */
+    .sidebar-user {
+        padding: 20px;
+        font-size: 22px;
+        font-weight: bold;
+        border-bottom: 1px solid #222;
+        text-align: center;
+        color: #f1c40f !important;
+    }
+
+    /* මෙනු අයිටම් වල පෙනුම */
+    .stRadio > div {
+        background-color: transparent !important;
+    }
+    
+    /* Section Boxes */
     .section-box {
         background-color: #ffffff;
         padding: 25px;
         border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        border: 1px solid #eef0f2;
-        margin-top: 80px; /* Top bar එකට යට නොවීමට */
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border: 1px solid #ddd;
+        margin-top: 20px;
     }
 
-    /* Streamlit Default Header අයින් කිරීම */
-    header {visibility: hidden;}
+    /* අනවශ්‍ය දේවල් අයින් කිරීම */
     #MainMenu, footer {visibility: hidden;}
     </style>
-
-    <div class="top-bar">
-        <span class="menu-btn">☰</span>
-        <div class="brand-name">My Odds System / HappyShop ERP</div>
-    </div>
     """, unsafe_allow_html=True)
 
-# --- 3. SESSION STATE (දත්ත සහ Login) ---
+# --- 3. SESSION STATE (දත්ත පාලනය) ---
 if 'user' not in st.session_state:
     st.session_state.user = None
 if 'orders' not in st.session_state:
@@ -86,62 +81,82 @@ if st.session_state.user is None:
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
         st.markdown("<div class='section-box'>", unsafe_allow_html=True)
-        st.markdown("<h2 style='text-align:center;'>System Login</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align:center;'>Sandun ERP Login</h2>", unsafe_allow_html=True)
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
         if st.button("Log In", use_container_width=True):
             if u == "happyshop@gmail.com" and p == "VLG0005":
-                st.session_state.user = "Admin"
+                st.session_state.user = "Sandun"
                 st.rerun()
             else:
                 st.error("විස්තර වැරදියි!")
         st.markdown("</div>", unsafe_allow_html=True)
 else:
-    # --- 5. SIDEBAR MENU (උඹ එවපු Menu Links ටික) ---
+    # --- 5. SIDEBAR MENU (Dark Sidebar with Submenu) ---
     with st.sidebar:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("### 🗄️ Navigation")
-        choice = st.radio("Menu", [
-            "Home", "Live Odds", "VIP Tips", "Results", "New Order", "Order Search", "Contact"
-        ])
+        st.markdown("<div class='sidebar-user'>Sandun</div>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         
-        st.markdown("---")
-        if st.button("Logout"):
+        # ප්‍රධාන මෙනු එක
+        main_choice = st.selectbox("MAIN MENU", [
+            "🏠 Dashboard", "📦 GRN", "💰 Expense", "🧾 Orders", "🚚 Shipped Items", "↩️ Return", "📊 Stocks"
+        ])
+
+        # Orders තේරුවොත් පමණක් Submenu එක පෙන්වීම (උඹේ HTML එකේ විදියට)
+        sub_choice = "None"
+        if "Orders" in main_choice:
+            st.markdown("---")
+            st.markdown("<p style='color:#ccc; font-size:12px; margin-left:10px;'>ORDERS SUBMENU</p>", unsafe_allow_html=True)
+            sub_choice = st.radio("Select Action", [
+                "New Order", "Pending Orders", "Order Search", 
+                "Import Lead", "View Lead", "Add Lead", 
+                "Order History", "Exchanging Orders", "Blacklist Manager"
+            ], label_visibility="collapsed")
+        
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        if st.button("🚪 Logout", use_container_width=True):
             st.session_state.user = None
             st.rerun()
 
-    # --- 6. අදාළ පේජ් වල ඩේටා (FEATURES) ---
-    st.markdown("<div class='section-box'>", unsafe_allow_html=True)
+    # --- 6. අන්තර්ගතය (Main Content Area) ---
+    st.markdown(f"### {main_choice}")
     
-    if choice == "Home":
-        st.subheader("🏠 Welcome to Dashboard")
-        st.write("පද්ධතියේ සාරාංශය මෙහි පෙන්වයි.")
+    if main_choice == "🏠 Dashboard":
+        st.markdown("<div class='section-box'>", unsafe_allow_html=True)
+        st.subheader("Welcome back, Sandun!")
+        st.write("අද දින ඕඩර් ප්‍රමාණය සහ සාරාංශය මෙහි පෙන්වයි.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    elif "Orders" in main_choice:
+        st.markdown(f"#### 🧾 {sub_choice}")
+        st.markdown("<div class='section-box'>", unsafe_allow_html=True)
         
-    elif choice == "Live Odds":
-        st.subheader("📊 Live Odds System")
-        st.info("දැනට ක්‍රියාත්මක වන Odds මෙතැනින් බලන්න.")
+        if sub_choice == "New Order":
+            c1, c2 = st.columns(2)
+            with c1:
+                name = st.text_input("Customer Name")
+                phone = st.text_input("Contact")
+            with c2:
+                item = st.selectbox("Product", ["Hair Oil", "Herbal Kit"])
+                amt = st.number_input("Amount")
+            if st.button("Save Order"):
+                st.session_state.orders.append({
+                    "Date": str(datetime.now().date()), 
+                    "Name": name, "Phone": phone, 
+                    "Item": item, "Amount": amt
+                })
+                st.success("Order Saved!")
 
-    elif choice == "New Order":
-        st.subheader("📝 Create New Order")
-        c1, c2 = st.columns(2)
-        with c1:
-            name = st.text_input("Customer Name")
-            phone = st.text_input("Phone Number")
-        with c2:
-            item = st.selectbox("Product", ["Hair Oil", "Herbal Pack"])
-            price = st.number_input("Price")
+        elif sub_choice == "Order Search":
+            q = st.text_input("සෙවීමට නම ඇතුළත් කරන්න")
+            if st.session_state.orders:
+                df = pd.DataFrame(st.session_state.orders)
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("දත්ත කිසිවක් නැත.")
         
-        if st.button("Save Order"):
-            st.session_state.orders.append({"Date": str(datetime.now().date()), "Name": name, "Phone": phone, "Item": item, "Price": price})
-            st.success("Order Saved Successfully!")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    elif choice == "Order Search":
-        st.subheader("🔍 Order History / Search")
-        if st.session_state.orders:
-            df = pd.DataFrame(st.session_state.orders)
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.warning("දත්ත කිසිවක් නැත.")
-
-    st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        st.info(f"{main_choice} සඳහා දත්ත පද්ධතිය සකස් වෙමින් පවතී.")
 
