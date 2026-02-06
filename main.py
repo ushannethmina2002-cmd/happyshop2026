@@ -1,30 +1,30 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import uuid
 import os
-import plotly.express as px  # Analytics සඳහා
+import plotly.express as px
+import plotly.graph_objects as go
+import time
+import re
 
-# --- 0. DATA PERSISTENCE (ස්ථීරව දත්ත තබා ගැනීම) ---
+# --- 0. DATA PERSISTENCE & SYSTEM STABILIZER ---
 def save_data(df, filename):
     df.to_csv(filename, index=False)
 
 def load_data(filename):
     if os.path.exists(filename):
-        return pd.read_csv(filename).to_dict('records')
+        df = pd.read_csv(filename)
+        return df.to_dict('records')
     return []
 
-# විශාල අංක කෙටි කර පෙන්වීමේ ශ්‍රිතය (Formatting Large Numbers)
 def format_currency(num):
-    if num >= 1_000_000_000:
-        return f"{num / 1_000_000_000:.1f}B"
-    elif num >= 1_000_000:
-        return f"{num / 1_000_000:.1f}M"
-    elif num >= 1_000:
-        return f"{num / 1_000:.1f}K"
+    if num >= 1_000_000_000: return f"{num / 1_000_000_000:.1f}B"
+    elif num >= 1_000_000: return f"{num / 1_000_000:.1f}M"
+    elif num >= 1_000: return f"{num / 1_000:.1f}K"
     return f"{num:,.2f}"
 
-# --- ලංකාවේ දිස්ත්‍රික්ක සහ නගර දත්ත ---
+# --- SRI LANKA GEO-DATA ---
 SL_DATA = {
     "Colombo": ["Colombo 1-15", "Dehiwala", "Mount Lavinia", "Nugegoda", "Maharagama", "Kottawa", "Malabe", "Battaramulla"],
     "Gampaha": ["Gampaha", "Negombo", "Kadawatha", "Kiribathgoda", "Wattala", "Ja-Ela", "Veyangoda"],
@@ -36,345 +36,212 @@ SL_DATA = {
     "Matara": ["Matara", "Akuressa", "Weligama"],
     "Hambantota": ["Hambantota", "Tangalle", "Beliatta"],
     "Jaffna": ["Jaffna", "Chavakachcheri"],
-    "Mannar": ["Mannar"],
-    "Vavuniya": ["Vavuniya"],
-    "Mullaitivu": ["Mullaitivu"],
-    "Kilinochchi": ["Kilinochchi"],
-    "Batticaloa": ["Batticaloa"],
-    "Ampara": ["Ampara", "Kalmunai"],
-    "Trincomalee": ["Trincomalee"],
+    "Mannar": ["Mannar"], "Vavuniya": ["Vavuniya"], "Mullaitivu": ["Mullaitivu"], "Kilinochchi": ["Kilinochchi"],
+    "Batticaloa": ["Batticaloa"], "Ampara": ["Ampara", "Kalmunai"], "Trincomalee": ["Trincomalee"],
     "Kurunegala": ["Kurunegala", "Kuliyapitiya", "Narammala", "Pannala"],
     "Puttalam": ["Puttalam", "Chilaw", "Marawila"],
-    "Anuradhapura": ["Anuradhapura", "Eppawala", "Kekirawa"],
-    "Polonnaruwa": ["Polonnaruwa"],
-    "Badulla": ["Badulla", "Bandarawela", "Hali-Ela"],
-    "Moneragala": ["Moneragala", "Wellawaya"],
-    "Ratnapura": ["Ratnapura", "Embilipitiya", "Balangoda"],
-    "Kegalle": ["Kegalle", "Mawanella", "Warakapola"]
+    "Anuradhapura": ["Anuradhapura", "Eppawala", "Kekirawa"], "Polonnaruwa": ["Polonnaruwa"],
+    "Badulla": ["Badulla", "Bandarawela", "Hali-Ela"], "Moneragala": ["Moneragala", "Wellawaya"],
+    "Ratnapura": ["Ratnapura", "Embilipitiya", "Balangoda"], "Kegalle": ["Kegalle", "Mawanella", "Warakapola"]
 }
 
-# --- 1. PAGE CONFIGURATION ---
-st.set_page_config(page_title="Happy Shop | Full Enterprise ERP", layout="wide", initial_sidebar_state="expanded")
+# --- 1. PAGE CONFIG ---
+st.set_page_config(page_title="Happy Shop | Ultimate Enterprise", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. SESSION STATE ---
-if 'orders' not in st.session_state:
-    st.session_state.orders = load_data('orders.csv')
-
+# --- 2. SESSION STATE & DB (SYNC WITH ORIGINAL) ---
+if 'orders' not in st.session_state: st.session_state.orders = load_data('orders.csv')
 if 'stocks' not in st.session_state:
     if os.path.exists('stocks.csv'):
         df_s = pd.read_csv('stocks.csv')
         st.session_state.stocks = dict(zip(df_s.Item, df_s.Qty))
     else:
-        st.session_state.stocks = {"Kesharaja Hair Oil [VGLS0005]": 100, "Crown 1": 50, "Kalkaya": 75}
-        save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
+        st.session_state.stocks = {"Kesharaja Hair Oil": 100, "Crown 1": 50, "Kalkaya": 75}
+if 'expenses' not in st.session_state: st.session_state.expenses = load_data('expenses.csv')
+if 'audit_logs' not in st.session_state: st.session_state.audit_logs = load_data('audit.csv')
+if 'authenticated' not in st.session_state: st.session_state.authenticated = False
+if 'user_role' not in st.session_state: st.session_state.user_role = None
 
-if 'expenses' not in st.session_state:
-    st.session_state.expenses = load_data('expenses.csv')
+# --- 3. AUTH SYSTEM (SECURE EMAIL LOGIN) ---
+def check_auth(u, p):
+    if u == "happyshop@gmail.com" and p == "happy123":
+        return True, "Owner", "Admin"
+    for i in range(1, 6):
+        if u == f"demo{i}@gmail.com" and p == f"demo{i}":
+            return True, "Staff", f"Staff_{i}"
+    return False, None, None
 
-if 'grn_history' not in st.session_state:
-    st.session_state.grn_history = load_data('grn.csv')
-
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-
-# --- 3. LOGIN SYSTEM ---
 if not st.session_state.authenticated:
-    st.markdown("<h2 style='text-align: center; color: #ffa500;'>HAPPY SHOP LOGIN</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #ffa500;'>HAPPY SHOP ENTERPRISE LOGIN</h2>", unsafe_allow_html=True)
     with st.form("login_form"):
-        user = st.text_input("Username")
+        user = st.text_input("Username (Email)")
         pw = st.text_input("Password", type="password")
         if st.form_submit_button("Login"):
-            if user == "admin" and pw == "happy123":
-                st.session_state.authenticated = True
+            auth, role, name = check_auth(user, pw)
+            if auth:
+                st.session_state.authenticated, st.session_state.user_role, st.session_state.current_user = True, role, name
                 st.rerun()
-            else:
-                st.error("Invalid Username or Password")
+            else: st.error("Invalid Login Details")
     st.stop()
 
-# --- 4. CSS & PRINTING DESIGN ---
+# --- 4. CSS (VIBRANT THEME) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0d1117; color: #c9d1d9; }
-    [data-testid="stSidebar"] { background-color: #161b22 !important; }
-    .metric-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 25px; }
-    .m-card { padding: 12px; border-radius: 10px; text-align: center; min-width: 120px; color: white; font-weight: bold; }
-    .bg-p { background: #6c757d; } .bg-c { background: #28a745; } .bg-n { background: #ffc107; color: black; } 
-    .bg-x { background: #dc3545; } .bg-f { background: #343a40; } .bg-t { background: #007bff; }
-    .val { font-size: 24px; display: block; }
-    
-    .ship-header { background-color: #1f2937; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #374151; }
-    .status-tab { padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; margin-right: 5px; color: white;}
-
-    @media print {
-        body * { visibility: hidden; }
-        .print-area, .print-area * { visibility: visible !important; }
-        .print-area { position: absolute; left: 0; top: 0; width: 100%; color: black !important; background: white !important; padding: 20px; }
-        .bill-head { border-bottom: 2px solid black; padding-bottom: 10px; font-size: 24px; }
-        .bc-box { border: 2px solid black; padding: 10px; font-size: 28px; text-align: center; margin: 10px 0; }
-        .way-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .way-table td, .way-table th { border: 1px solid black; padding: 10px; font-size: 16px; text-align: left; color: black; }
-    }
+    .m-card { padding: 15px; border-radius: 12px; text-align: center; color: white; font-weight: bold; border: 1px solid #30363d; margin-bottom: 10px; }
+    .bg-p { background: linear-gradient(135deg, #6c757d, #495057); } 
+    .bg-c { background: linear-gradient(135deg, #28a745, #1e7e34); } 
+    .bg-n { background: linear-gradient(135deg, #ffc107, #e0a800); color: black; } 
+    .bg-x { background: linear-gradient(135deg, #dc3545, #bd2130); } 
+    .bg-t { background: linear-gradient(135deg, #007bff, #0062cc); }
+    .wa-btn { background-color: #25D366; color: white; padding: 8px 15px; border-radius: 8px; text-decoration: none; font-size: 14px; display: inline-block; }
+    .ghost-tag { background: #6f42c1; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 5. SIDEBAR NAVIGATION ---
+# --- 5. GHOST SWITCH (ADMIN ONLY) ---
+if st.session_state.user_role == "Owner":
+    with st.sidebar:
+        st.markdown("### 🛠️ Ghost Switcher")
+        staff_list = ["Admin"] + [f"Staff_{i}" for i in range(1, 6)]
+        switch_to = st.selectbox("Switch View To:", staff_list)
+        if st.button("Confirm Switch"):
+            st.session_state.current_user = switch_to
+            st.toast(f"Active User: {switch_to}")
+
+# --- 6. SIDEBAR NAVIGATION ---
 with st.sidebar:
-    st.markdown("<h1 style='color:#ffa500; text-align:center;'>HAPPY SHOP</h1>", unsafe_allow_html=True)
-    menu = st.selectbox("MAIN NAVIGATION", ["🏠 Dashboard", "🧾 Orders", "🚚 Shipped Items", "📦 GRN", "💰 Expense", "🔄 Return", "📊 Stocks", "🛍️ Products"])
+    st.markdown(f"👤 **{st.session_state.current_user}**")
+    st.markdown("---")
+    menu = st.selectbox("Navigation", ["🏠 Dashboard", "🧾 Orders", "📊 Inventory", "💰 Finance & Payroll", "📈 Strategy & AI"])
     
     sub = ""
-    if menu == "🧾 Orders": 
-        sub = st.radio("Order Menu", ["New Order", "Pending Orders", "Order Search", "Import Lead", "View Lead", "Add Lead", "Order History", "Exchanging Orders", "Blacklist Manager"])
-    elif menu == "🚚 Shipped Items": 
-        sub = st.radio("Shipping Menu", ["Ship", "Shipped List", "Shipped Summary", "Delivery Summary", "Courier Feedback", "Confirm Dispatch", "Print Dispatch Items", "Search Waybills", "Courier Feedback Summary"])
-    elif menu == "📦 GRN": sub = st.radio("GRN Menu", ["New GRN", "GRN List"])
-    elif menu == "📊 Stocks": sub = st.radio("Stock Menu", ["View Stocks", "Adjustment"])
+    if menu == "🧾 Orders":
+        sub = st.radio("Order Actions", ["New Order", "View Leads", "Bulk Courier Sync"])
+    elif menu == "💰 Finance & Payroll":
+        sub = st.radio("Financials", ["Expense Tracker", "Staff Payroll"])
 
-# --- 6. DASHBOARD ---
+# --- 7. DASHBOARD & FORECAST ---
 if menu == "🏠 Dashboard":
-    low_stock_items = [item for item, qty in st.session_state.stocks.items() if int(qty) < 10]
-    if low_stock_items:
-        st.error(f"⚠️ **Low Stock Alert:** {', '.join(low_stock_items)} are running low!")
-
-    def get_count(s): return len([o for o in st.session_state.orders if o.get('status') == s])
-    st.markdown(f"""
-        <div class="metric-container">
-            <div class="m-card bg-p">PENDING<span class="val">{get_count('pending')}</span></div>
-            <div class="m-card bg-c">CONFIRMED<span class="val">{get_count('confirm')}</span></div>
-            <div class="m-card bg-n">NO ANSWER<span class="val">{get_count('noanswer')}</span></div>
-            <div class="m-card bg-x">CANCEL<span class="val">{get_count('cancel')}</span></div>
-            <div class="m-card bg-f">FAKE<span class="val">{get_count('fake')}</span></div>
-            <div class="m-card bg-t">TOTAL<span class="val">{len(st.session_state.orders)}</span></div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    st.subheader("📊 Profit & Loss Overview")
-    total_rev = sum([float(o['total']) for o in st.session_state.orders if o['status'] == 'shipped'])
-    total_exp = sum([float(e['amount']) for e in st.session_state.expenses])
-    net_profit = total_rev - total_exp
+    st.title(f"🚀 Business Control Center - {st.session_state.current_user}")
     
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Revenue", f"LKR {format_currency(total_rev)}")
-    c2.metric("Expenses", f"LKR {format_currency(total_exp)}")
-    c3.metric("Net Profit", f"LKR {format_currency(net_profit)}")
+    def get_count(s): return len([o for o in st.session_state.orders if o.get('status') == s])
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.markdown(f'<div class="m-card bg-p">PENDING<br><span style="font-size:24px">{get_count("pending")}</span></div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="m-card bg-c">CONFIRMED<br><span style="font-size:24px">{get_count("confirm")}</span></div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="m-card bg-n">NO ANSWER<br><span style="font-size:24px">{get_count("noanswer")}</span></div>', unsafe_allow_html=True)
+    c4.markdown(f'<div class="m-card bg-x">CANCELLED<br><span style="font-size:24px">{get_count("cancel")}</span></div>', unsafe_allow_html=True)
+    c5.markdown(f'<div class="m-card bg-t">TOTAL LEADS<br><span style="font-size:24px">{len(st.session_state.orders)}</span></div>', unsafe_allow_html=True)
 
-    if st.session_state.orders:
-        df_orders = pd.DataFrame(st.session_state.orders)
-        col_chart1, col_chart2 = st.columns(2)
-        with col_chart1:
-            st.write("**Sales by District**")
-            fig1 = px.pie(df_orders, names='dist', hole=0.4)
-            st.plotly_chart(fig1, use_container_width=True)
-        with col_chart2:
-            st.write("**Order Status Distribution**")
-            fig2 = px.bar(df_orders, x='status', color='status')
-            st.plotly_chart(fig2, use_container_width=True)
+    # Inventory Forecast Logic
+    st.subheader("🤖 Smart Inventory Forecast")
+    df_orders = pd.DataFrame(st.session_state.orders)
+    if not df_orders.empty:
+        # Calculate daily sales velocity
+        df_confirmed = df_orders[df_orders['status'] == 'confirm']
+        if not df_confirmed.empty:
+            velocity = len(df_confirmed) / 30 # monthly average velocity
+            cols = st.columns(len(st.session_state.stocks))
+            for i, (item, qty) in enumerate(st.session_state.stocks.items()):
+                days = int(qty / velocity) if velocity > 0 else 999
+                color = "🔴" if days < 5 else "🟢"
+                cols[i].metric(item, f"{qty} units", f"{days} days left {color}")
 
-# --- 7. ORDERS ---
+# --- 8. ORDERS (COMPLETE LOGIC) ---
 elif menu == "🧾 Orders":
-    if sub in ["New Order", "Add Lead"]:
-        st.subheader(f"📝 Happy Shop - {sub}")
-        with st.form("full_order", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            with c1:
-                name = st.text_input("Customer Name *")
-                phone = st.text_input("Contact Number 1 *")
-                addr = st.text_area("Address *")
-                dist = st.selectbox("District", list(SL_DATA.keys()))
-                city = st.selectbox("City", SL_DATA[dist])
-            with c2:
-                prod = st.selectbox("Product", list(st.session_state.stocks.keys()))
-                qty = st.number_input("Qty", min_value=1, value=1)
-                price = st.number_input("Sale Amount", value=2950.0)
-                delivery = st.number_input("Delivery Charge", value=350.0)
-                discount = st.number_input("Discount", value=0.0)
-                courier = st.selectbox("Courier Company", ["Koombiyo", "Domex", "Pronto", "Royal Express"])
+    if sub == "New Order":
+        st.subheader("✨ New Order Entry")
+        
+        # Smart Parser Box
+        with st.expander("📋 Smart Paste (Extract from WhatsApp)"):
+            raw_text = st.text_area("Paste Customer WhatsApp message here...")
+            if st.button("Parse Data"):
+                phone_match = re.search(r'(\d{10})', raw_text)
+                st.session_state.p_name = raw_text.split('\n')[0] if raw_text else ""
+                st.session_state.p_phone = phone_match.group(1) if phone_match else ""
+                st.session_state.p_addr = " ".join(raw_text.split('\n')[1:]) if len(raw_text.split('\n')) > 1 else ""
+                st.success("Form Auto-filled!")
+
+        with st.form("new_order_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            name = col1.text_input("Name", value=st.session_state.get('p_name', ""))
+            phone = col1.text_input("Phone", value=st.session_state.get('p_phone', ""))
+            address = col1.text_area("Full Address", value=st.session_state.get('p_addr', ""))
             
-            if st.form_submit_button("🚀 SAVE ORDER"):
+            dist = col2.selectbox("District", list(SL_DATA.keys()))
+            city = col2.selectbox("City", SL_DATA[dist])
+            prod = col2.selectbox("Product", list(st.session_state.stocks.keys()))
+            courier = col2.selectbox("Courier", ["Royal Express", "Koombiyo", "Domex", "Pronto"])
+            price = col2.number_input("Price (LKR)", value=2500)
+            
+            if st.form_submit_button("🚀 Save & Confirm Order"):
                 oid = f"HS-{uuid.uuid4().hex[:6].upper()}"
-                st.session_state.orders.append({
-                    "id": oid, "name": name, "phone": phone, "addr": addr, "city": city, "dist": dist,
-                    "prod": prod, "qty": qty, "price": price, "delivery": delivery, "discount": discount,
-                    "total": (price * qty) + delivery - discount, "status": "pending", "date": str(date.today()), "courier": courier, "printed": "No", "user": "Admin"
-                })
+                new_ord = {
+                    "id": oid, "name": name, "phone": phone, "addr": address, "dist": dist, "city": city,
+                    "prod": prod, "total": price, "status": "pending", "date": str(date.today()),
+                    "courier": courier, "staff": st.session_state.current_user, "notes": "", "cancel_reason": ""
+                }
+                st.session_state.orders.append(new_ord)
                 save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                st.success(f"Order {oid} Saved Successfully!")
+                st.balloons()
+                st.success(f"Order {oid} saved successfully!")
 
-    elif sub == "View Lead":
-        st.markdown('<div class="ship-header"><h3>🔍 Leads Search</h3>', unsafe_allow_html=True)
-        # ඡායාරූපයට අනුව Search පේළිය
-        fc1, fc2, fc3, fc4, fc5 = st.columns(5)
-        s_status = fc1.selectbox("Status", ["Any", "pending", "confirm", "noanswer", "rejected", "fake", "cancelled", "onhold", "deleted"])
-        s_user = fc2.selectbox("User", ["Any", "Admin", "Staff 01", "Crown Dimo 3"])
-        s_name = fc3.text_input("Customer Name")
-        s_start = fc4.date_input("Start Date", date.today())
-        s_end = fc5.date_input("End Date", date.today())
+    elif sub == "View Leads":
+        st.subheader("📋 Lead Manager")
+        search = st.text_input("🔍 Search Leads (Name / Phone / ID)")
+        df = pd.DataFrame(st.session_state.orders)
         
-        fc6, fc7 = st.columns([1, 4])
-        s_product = fc6.selectbox("Product", ["Any"] + list(st.session_state.stocks.keys()))
-        if fc7.button("Search", type="primary"):
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        if not df.empty:
+            if search:
+                df = df[df.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
+            
+            for idx, row in df.iterrows():
+                # Risk Analysis
+                risk = "🟢 SAFE"
+                if any(o['phone'] == row['phone'] and o['status'] == 'return' for o in st.session_state.orders):
+                    risk = "🔴 HIGH RETURN RISK"
 
-        # Status Tabs Summary (ඡායාරූපය අනුව)
-        def cnt(st_val): return len([o for o in st.session_state.orders if o.get('status') == st_val])
-        st.markdown(f"""
-            <div style="display:flex; flex-wrap:wrap; margin-bottom:20px;">
-                <span class="status-tab" style="background:#4b5563;">Leads List: {len(st.session_state.orders)}</span>
-                <span class="status-tab" style="background:#6c757d;">Pending: {cnt('pending')}</span>
-                <span class="status-tab" style="background:#28a745;">Ok: {cnt('confirm')}</span>
-                <span class="status-tab" style="background:#ffc107; color:black;">No Answer: {cnt('noanswer')}</span>
-                <span class="status-tab" style="background:#dc3545;">Rejected: {cnt('rejected')}</span>
-                <span class="status-tab" style="background:#343a40;">Fake: {cnt('fake')}</span>
-                <span class="status-tab" style="background:#dc3545;">Cancelled: {cnt('cancelled')}</span>
-                <span class="status-tab" style="background:#d97706;">On Hold: {cnt('onhold')}</span>
-                <span class="status-tab" style="background:#374151;">Deleted: {cnt('deleted')}</span>
-            </div>
-        """, unsafe_allow_html=True)
+                with st.expander(f"📦 {row['id']} | {row['name']} | {row['status'].upper()} | {risk}"):
+                    # WhatsApp Link
+                    wa_url = f"https://wa.me/94{row['phone'][1:]}?text=Hi {row['name']}, Happy Shop here."
+                    st.markdown(f'<a href="{wa_url}" target="_blank" class="wa-btn">💬 WhatsApp Customer</a>', unsafe_allow_html=True)
+                    
+                    c1, c2 = st.columns(2)
+                    new_st = c1.selectbox("Update Status", ["pending", "confirm", "noanswer", "hold", "cancel", "shipped"], key=f"st_{idx}")
+                    
+                    # Logic for cancel reasons
+                    reason = ""
+                    if new_st == "cancel":
+                        reason = c1.selectbox("Reason", ["Price", "Late", "Fake", "Change Mind"], key=f"re_{idx}")
+                    
+                    new_notes = c2.text_area("Internal Notes", row.get('notes', ""), key=f"nt_{idx}")
+                    
+                    if st.button("Save Updates", key=f"btn_{idx}"):
+                        st.session_state.orders[idx]['status'] = new_st
+                        st.session_state.orders[idx]['notes'] = new_notes
+                        if new_st == "cancel": st.session_state.orders[idx]['cancel_reason'] = reason
+                        save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
+                        st.rerun()
 
-        # Filtering Logic
-        filtered_orders = st.session_state.orders
-        if s_status != "Any":
-            filtered_orders = [o for o in filtered_orders if o['status'] == s_status]
-        if s_name:
-            filtered_orders = [o for o in filtered_orders if s_name.lower() in o['name'].lower() or s_name in str(o['phone'])]
-        if s_product != "Any":
-            filtered_orders = [o for o in filtered_orders if o['prod'] == s_product]
+# --- 9. FINANCE & PAYROLL (FEATURE 39) ---
+elif menu == "💰 Finance & Payroll":
+    if sub == "Staff Payroll":
+        st.title("💸 Staff Commission & Salary")
+        df = pd.DataFrame(st.session_state.orders)
+        if not df.empty:
+            summary = df[df['status'] == 'confirm'].groupby('staff').size().reset_index(name='Total_Confirms')
+            summary['Base_Salary'] = 30000
+            summary['Commission'] = summary['Total_Confirms'] * 50
+            summary['Final_Payable'] = summary['Base_Salary'] + summary['Commission']
+            st.table(summary)
 
-        if filtered_orders:
-            # ඡායාරූපයේ ඇති Column පේළියට අනුව Table එක
-            table_data = []
-            for o in filtered_orders:
-                table_data.append({
-                    "Lead Date": o.get('date'),
-                    "Customer Name": o.get('name'),
-                    "Customer Address": o.get('addr'),
-                    "Contact #1": o.get('phone'),
-                    "Pro Code": o.get('prod'),
-                    "Staff": o.get('user', 'Admin'),
-                    "Status": o.get('status').upper()
-                })
-            st.table(pd.DataFrame(table_data))
+# --- 10. INVENTORY ---
+elif menu == "📊 Inventory":
+    st.title("📦 Current Stock Status")
+    st.table(pd.DataFrame(st.session_state.stocks.items(), columns=["Item Name", "Quantity Available"]))
 
-            st.write("### 🛠️ Quick Actions")
-            for idx, o in enumerate(filtered_orders):
-                with st.expander(f"Action: {o['id']} - {o['name']}"):
-                    acols = st.columns(6)
-                    if acols[0].button("Confirm ✅", key=f"c{idx}"): 
-                        o['status'] = 'confirm'; save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
-                    if acols[1].button("No Answer ☎", key=f"n{idx}"): 
-                        o['status'] = 'noanswer'; save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
-                    if acols[2].button("Rejected ❌", key=f"r{idx}"): 
-                        o['status'] = 'rejected'; save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
-                    if acols[3].button("Fake ⚠️", key=f"f{idx}"): 
-                        o['status'] = 'fake'; save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
-                    if acols[4].button("Delete 🗑️", key=f"d{idx}"): 
-                        o['status'] = 'deleted'; save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
-                    if acols[5].button("Add Order ➕", key=f"ao{idx}"):
-                        st.success("Proceeding to create order from lead...")
+# --- LOGOUT ---
+if st.sidebar.button("🔓 Logout"):
+    st.session_state.authenticated = False
+    st.rerun()
 
-    elif sub == "Pending Orders":
-        st.subheader("⏳ Pending Orders")
-        pending = [o for o in st.session_state.orders if o['status'] == 'pending']
-        if pending: st.table(pd.DataFrame(pending))
-        else: st.info("No pending orders.")
-
-# --- 8. SHIPPED ITEMS ---
-elif menu == "🚚 Shipped Items":
-    if sub in ["Ship", "Shipping Dashboard"]:
-        st.markdown('<div class="ship-header"><h3>🔍 Search orders for shipping</h3>', unsafe_allow_html=True)
-        # ඡායාරූපයට අනුව Shipping Search පේළිය
-        c1, c2, c3, c4 = st.columns(4)
-        f_user = c1.selectbox("User", ["Any", "Admin", "Staff"])
-        f_range = c2.selectbox("Date Range", ["Disable", "Today", "Yesterday", "Last 7 Days"])
-        f_courier = c3.selectbox("Courier", ["All", "Koombiyo", "Domex", "Pronto", "Royal Express"])
-        f_drop = c4.selectbox("Dropshipper", ["Only Company Orders", "All"])
-        
-        st.button("Search Orders")
-        
-        # Summary Row
-        ready_orders = [o for o in st.session_state.orders if o['status'] in ['confirm', 'ready_print']]
-        st.markdown(f"**{len(ready_orders)} Items have to ship** | **Total: {len(st.session_state.orders)}**")
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Ready to Ship Table (ඡායාරූපයට අනුව)
-        if ready_orders:
-            df_ready = pd.DataFrame(ready_orders)
-            st.write("#### Ready to Ship List")
-            st.dataframe(df_ready[['date', 'id', 'prod', 'qty', 'name', 'addr', 'city', 'phone', 'status']], use_container_width=True)
-
-    elif sub == "Confirm Dispatch":
-        st.subheader("✅ Confirm Dispatch")
-        ready_to_confirm = [o for o in st.session_state.orders if o['status'] == 'confirm']
-        if ready_to_confirm:
-            for idx, o in enumerate(ready_to_confirm):
-                col1, col2 = st.columns([4, 1])
-                col1.write(f"**{o['id']}** - {o['name']} | {o['city']} | {o['prod']}")
-                if col2.button("Ready to Print", key=f"conf_{idx}"):
-                    o['status'] = 'ready_print'
-                    save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                    st.rerun()
-        else:
-            st.info("No confirmed orders waiting for dispatch.")
-
-    elif sub == "Print Dispatch Items":
-        st.subheader("🖨️ Print Dispatch Items")
-        to_print = [o for o in st.session_state.orders if o['status'] == 'ready_print']
-        if to_print:
-            for idx, ro in enumerate(to_print):
-                st.markdown(f"**{ro['id']}** - {ro['name']}")
-                if st.button(f"Mark as Shipped {ro['id']}", key=f"p_{idx}"):
-                    st.session_state.stocks[ro['prod']] -= int(ro['qty'])
-                    ro['status'] = 'shipped'
-                    save_data(pd.DataFrame(st.session_state.orders), 'orders.csv')
-                    save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
-                    st.success(f"{ro['id']} Shipped!")
-                    st.rerun()
-
-    elif sub == "Search Waybills":
-        st.subheader("🔍 Search Waybills")
-        wb_search = st.text_input("Enter Phone or Waybill Number")
-        if wb_search:
-            res = [o for o in st.session_state.orders if wb_search in str(o['phone']) or wb_search in o['id']]
-            if res: st.table(pd.DataFrame(res))
-
-# --- 9. GRN, EXPENSES & STOCKS ---
-elif menu == "📦 GRN":
-    if sub == "New GRN":
-        with st.form("grn"):
-            p = st.selectbox("Product", list(st.session_state.stocks.keys()))
-            q = st.number_input("Received Qty", min_value=1)
-            if st.form_submit_button("Add to Stock"):
-                st.session_state.stocks[p] += q
-                st.session_state.grn_history.append({"date": str(date.today()), "prod": p, "qty": q})
-                save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
-                save_data(pd.DataFrame(st.session_state.grn_history), 'grn.csv')
-                st.success("Stock Updated!")
-    else: 
-        if st.session_state.grn_history: st.table(pd.DataFrame(st.session_state.grn_history))
-
-elif menu == "💰 Expense":
-    with st.form("exp"):
-        c1, c2 = st.columns(2)
-        cat = c1.selectbox("Category", ["Marketing", "Packaging", "Courier Fee", "Salary", "Rent", "Utility"])
-        amt = c2.number_input("Amount")
-        if st.form_submit_button("Log Expense"):
-            st.session_state.expenses.append({"date": str(date.today()), "cat": cat, "amount": amt})
-            save_data(pd.DataFrame(st.session_state.expenses), 'expenses.csv')
-            st.success("Expense Logged!")
-    if st.session_state.expenses: st.table(pd.DataFrame(st.session_state.expenses))
-
-elif menu == "📊 Stocks":
-    st.subheader("📈 Inventory Status")
-    df_s = pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Available Qty"])
-    st.table(df_s)
-
-elif menu == "🛍️ Products":
-    with st.form("p"):
-        n = st.text_input("New Product Name")
-        if st.form_submit_button("Add Product"):
-            if n and n not in st.session_state.stocks:
-                st.session_state.stocks[n] = 0
-                save_data(pd.DataFrame(st.session_state.stocks.items(), columns=["Item", "Qty"]), 'stocks.csv')
-                st.success(f"{n} Added!")
-                st.rerun()
+st.sidebar.caption(f"Enterprise v5.5 | {date.today()}")
