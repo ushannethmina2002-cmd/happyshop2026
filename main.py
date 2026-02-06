@@ -1,165 +1,189 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
+import base64
 
 # --- 1. PAGE CONFIGURATION ---
-st.set_page_config(page_title="Happy Shop | 1000% Pro ERP", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Happy Shop | Enterprise ERP", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. SESSION STATE (Data Persistence) ---
+# --- 2. SESSION STATE (Data Storage) ---
 if 'orders' not in st.session_state:
     st.session_state.orders = []
-if 'last_reset_date' not in st.session_state:
-    st.session_state.last_reset_date = date.today()
+if 'stocks' not in st.session_state:
+    st.session_state.stocks = {}
 
-# Daily Reset Logic
-if st.session_state.last_reset_date != date.today():
-    st.session_state.orders = []
-    st.session_state.last_reset_date = date.today()
-
-# --- 3. HELPER FUNCTIONS ---
-def get_count(status_name):
-    if status_name == "total": return len(st.session_state.orders)
-    return len([o for o in st.session_state.orders if o['status'] == status_name])
-
-# --- 4. PROFESSIONAL CSS ---
+# --- 3. PROFESSIONAL CSS STYLING ---
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e14; color: #e1e1e1; }
     [data-testid="stSidebar"] { background-color: #161b22 !important; }
-    .metric-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
-    .m-card {
-        padding: 10px; border-radius: 8px; text-align: center; min-width: 110px;
-        color: white; font-weight: bold; font-size: 13px; box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-    }
-    .bg-pending { background: #6c757d; } .bg-confirm { background: #28a745; } 
-    .bg-noanswer { background: #ffc107; color: black; } .bg-cancel { background: #dc3545; } 
-    .bg-fake { background: #343a40; } .bg-total { background: #007bff; }
-    .val { font-size: 22px; display: block; }
     
-    /* Print Styles */
+    /* Metric Cards */
+    .metric-container { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 25px; }
+    .m-card {
+        padding: 15px; border-radius: 12px; text-align: center; min-width: 140px;
+        color: white; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .bg-pending { background: #1a1d23; border: 1px solid #6c757d; }
+    .bg-confirm { background: #1b4d2e; } 
+    .bg-noanswer { background: #856404; } 
+    .bg-cancel { background: #721c24; }
+    .bg-total { background: #004085; }
+    .val { font-size: 28px; display: block; margin-top: 5px; }
+
+    /* Waybill Print Styling */
     @media print {
         .no-print { display: none !important; }
-        .print-only { display: block !important; border: 2px dashed #000; padding: 20px; color: black; background: white; }
+        .print-area { display: block !important; width: 100%; color: black !important; background: white !important; padding: 20px; }
     }
-    .print-only { display: none; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 5. SIDEBAR ---
+# --- 4. HELPER FUNCTIONS ---
+def get_count(status):
+    if status == "total": return len(st.session_state.orders)
+    return len([o for o in st.session_state.orders if o['status'] == status])
+
+def calculate_total_sales():
+    # පින්තූරවල තිබුණු KeyError එක විසඳීමට float() සහ check එකක් එක් කළා
+    try:
+        return sum(float(o.get('total_amt', 0)) for o in st.session_state.orders if o['status'] == 'confirm' or o['status'] == 'shipped')
+    except:
+        return 0.0
+
+# --- 5. SIDEBAR NAVIGATION (පින්තූරවල තිබුණු සියලුම Menu Items ඇතුළත්) ---
 with st.sidebar:
     st.markdown("<h1 style='color:#ffa500; text-align:center;'>HAPPY SHOP</h1>", unsafe_allow_html=True)
-    menu = st.selectbox("MAIN MENU", ["🏠 Dashboard", "🧾 Orders", "🚚 Shipped & Dispatch", "📊 Stocks"])
-    sub_menu = "View Lead"
     
-    if menu == "🧾 Orders":
-        sub_menu = st.radio("Actions", ["New Order", "View Lead", "Order Tracking"])
-    elif menu == "🚚 Shipped & Dispatch":
-        sub_menu = st.radio("Actions", ["Ship Items", "Dispatch List"])
+    menu = st.selectbox("MAIN NAVIGATION", 
+        ["🏠 Dashboard", "📦 GRN", "💰 Expense", "🧾 Orders", "🚚 Shipped Items", "🔄 Return", "📊 Stocks", "🛍️ Products"])
 
-# --- 6. ORDER TRACKING (NOTIFICATION SYSTEM) ---
-if sub_menu == "Order Tracking":
-    st.subheader("🔍 Search & Track Order")
-    search_q = st.text_input("Enter Phone Number or Order ID")
-    if search_q:
-        found = [o for o in st.session_state.orders if search_q in o['phone'] or search_q in o['order_id']]
-        if found:
-            res = found[0]
-            status_colors = {"pending": "gray", "confirm": "green", "noanswer": "orange", "cancel": "red", "shipped": "blue"}
-            st.toast(f"Order Found: {res['status'].upper()}", icon="ℹ️")
-            st.markdown(f"""
-                <div style="padding:20px; border-radius:10px; background:rgba(255,165,0,0.1); border:1px solid orange;">
-                    <h3>Status: <span style="color:{status_colors.get(res['status'], 'white')}">{res['status'].upper()}</span></h3>
-                    <p><b>Customer:</b> {res['customer']} | <b>Phone:</b> {res['phone']}</p>
-                    <p><b>Order ID:</b> {res['order_id']} | <b>Amount:</b> LKR {res['total']}</p>
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.error("No Order Found!")
+    # පින්තූරවල තිබුණු Sub-menus
+    sub_menu = ""
+    if menu == "📦 GRN":
+        sub_menu = st.sidebar.radio("GRN Actions", ["New GRN", "GRN List", "Reorder List", "New PO", "PO List", "Packing", "Packing List"])
+    elif menu == "💰 Expense":
+        sub_menu = st.sidebar.radio("Expense Actions", ["New Expense", "View Expenses", "Create Expense Type", "View Expense Type", "POS Expenses"])
+    elif menu == "🧾 Orders":
+        sub_menu = st.sidebar.radio("Order Actions", ["New Order", "Pending Orders", "Order Search", "Import Lead", "View Lead", "Add Lead", "Order History", "Blacklist Manager"])
+    elif menu == "🚚 Shipped Items":
+        sub_menu = st.sidebar.radio("Shipping Actions", ["Ship", "Shipped List", "Shipped Summary", "Delivery Summary", "Courier Feedback", "Confirm Dispatch", "Print Dispatch Items", "Search Waybills"])
+    elif menu == "🔄 Return":
+        sub_menu = st.sidebar.radio("Return Actions", ["Add Returns", "Returned Orders", "Pending Returns"])
+    elif menu == "📊 Stocks":
+        sub_menu = st.sidebar.radio("Stock Actions", ["View Stocks", "Stock Adjustment", "Stock Adjustment View", "Add Waste", "Stock Values"])
+    elif menu == "🛍️ Products":
+        sub_menu = st.sidebar.radio("Product Actions", ["Create Product", "View Products", "Raw Items"])
 
-# --- 7. METRIC CARDS ---
-if menu == "🏠 Dashboard" or sub_menu == "View Lead":
+# --- 6. TOP METRIC TILES ---
+if menu == "🏠 Dashboard" or "View Lead" in sub_menu or "New Order" in sub_menu:
     st.markdown(f"""
         <div class="metric-container">
             <div class="m-card bg-pending">PENDING<span class="val">{get_count('pending')}</span></div>
-            <div class="m-card bg-confirm">CONFIRMED<span class="val">{get_count('confirm')}</span></div>
+            <div class="m-card bg-confirm">OK (CONFIRMED)<span class="val">{get_count('confirm')}</span></div>
             <div class="m-card bg-noanswer">NO ANSWER<span class="val">{get_count('noanswer')}</span></div>
-            <div class="m-card bg-cancel">CANCEL<span class="val">{get_count('cancel')}</span></div>
-            <div class="m-card bg-fake">FAKE<span class="val">{get_count('fake')}</span></div>
-            <div class="m-card bg-total">TOTAL<span class="val">{get_count('total')}</span></div>
+            <div class="m-card bg-cancel">CANCEL/HOLD<span class="val">{get_count('cancel')}</span></div>
+            <div class="m-card bg-total">TOTAL SALES<span class="val">LKR {calculate_total_sales():,.2f}</span></div>
         </div>
     """, unsafe_allow_html=True)
 
-# --- 8. PAGE CONTENT ---
-if menu == "🏠 Dashboard":
-    st.title("Business Summary")
-    st.info(f"Today: {date.today()}")
+# --- 7. MAIN CONTENT LOGIC ---
 
-elif sub_menu == "New Order":
-    st.subheader("📝 Add New Order")
-    with st.form("new_order_f"):
-        c1, c2 = st.columns(2)
-        name = c1.text_input("Name")
-        phone = c1.text_input("Phone")
-        addr = c1.text_area("Address")
-        prod = c2.selectbox("Product", ["Hair Oil", "Crown 1", "Kalkaya"])
-        amt = c2.number_input("Amount", min_value=0.0)
-        if st.form_submit_button("Save Order"):
-            new_id = len(st.session_state.orders) + 1
-            st.session_state.orders.append({
-                "id": new_id, "order_id": f"HS-{1000+new_id}", 
-                "customer": name, "phone": phone, "status": "pending", "total": amt, "product": prod, "address": addr
-            })
-            st.success("Saved!")
-            st.rerun()
+# 7.1 NEW ORDER / ADD LEAD (සම්පූර්ණ Fields සහිතව)
+if menu == "🧾 Orders" and (sub_menu == "New Order" or sub_menu == "Add Lead"):
+    st.subheader("📝 Customer & Order Entry Form")
+    with st.form("full_order_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            c_name = st.text_input("Customer Name *")
+            c_address = st.text_area("Address *")
+            c_city = st.selectbox("Select City", ["Colombo", "Gampaha", "Kandy", "Galle", "Other"])
+            c_dist = st.selectbox("Select District", ["Colombo", "Gampaha", "Kalutara", "Other"])
+            c_phone1 = st.text_input("Contact Number One *")
+            c_phone2 = st.text_input("Contact Number Two")
+            c_email = st.text_input("Email")
+            c_source = st.selectbox("Order Source", ["Facebook", "WhatsApp", "Instagram", "TikTok"])
+        
+        with col2:
+            p_item = st.selectbox("Product", ["Kesharaja Hair Oil [VGLS0005]", "Crown 1 [VGLS0001]", "Kalkaya [VGLS0003]"])
+            p_qty = st.number_input("Qty", min_value=1, value=1)
+            p_price = st.number_input("Sale Amount (LKR)", min_value=0.0, value=2950.0)
+            p_discount = st.number_input("Product Discount", min_value=0.0)
+            p_courier = st.selectbox("Courier Company", ["Any", "Koombiyo", "Domex", "Pronto"])
+            p_weight = st.number_input("Pkg Weight (kgs)", min_value=0.0, value=0.5)
+            p_shipping = st.number_input("Delivery Charge", min_value=0.0)
+            p_note = st.text_area("Order Note")
+        
+        total_to_collect = (p_price * p_qty) + p_shipping - p_discount
+        st.markdown(f"### Total Amount to Collect: **LKR {total_to_collect:,.2f}**")
+        
+        if st.form_submit_button("🚀 SAVE & CONFIRM ORDER"):
+            if c_name and c_phone1:
+                order_id = f"HS-{len(st.session_state.orders) + 821370}"
+                st.session_state.orders.append({
+                    "order_id": order_id, "customer": c_name, "phone": c_phone1, "address": c_address,
+                    "item": p_item, "qty": p_qty, "total_amt": total_to_collect, "status": "pending",
+                    "date": str(date.today()), "courier": p_courier
+                })
+                st.success(f"Order {order_id} Saved Successfully!")
+                st.rerun()
 
-elif sub_menu == "View Lead":
-    st.subheader("📋 Orders Management")
-    for idx, order in enumerate(st.session_state.orders):
-        with st.expander(f"{order['order_id']} - {order['customer']} ({order['status'].upper()})"):
-            c1, c2, c3 = st.columns([2,1,1])
-            c1.write(f"📞 {order['phone']} | 📍 {order['address']}")
-            if c2.button("Confirm ✔", key=f"conf_{idx}"):
-                st.session_state.orders[idx]['status'] = "confirm"; st.rerun()
-            if c3.button("Shipped 🚚", key=f"ship_{idx}"):
-                st.session_state.orders[idx]['status'] = "shipped"; st.rerun()
+# 7.2 ORDER SEARCH & TRACKING (Notification System)
+elif menu == "🧾 Orders" and sub_menu == "Order Search":
+    st.subheader("🔍 Search & Track Order")
+    search_term = st.text_input("Enter Phone Number or Order ID to Track")
+    if search_term:
+        results = [o for o in st.session_state.orders if search_term in o['phone'] or search_term in o['order_id']]
+        if results:
+            for res in results:
+                st.info(f"📍 Order ID: {res['order_id']} | Status: {res['status'].upper()}")
+                st.json(res)
+        else:
+            st.warning("No Order Found for this Number.")
 
-elif sub_menu == "Ship Items":
-    st.subheader("🚚 Ready to Ship & Waybill Print")
-    ready_orders = [o for o in st.session_state.orders if o['status'] == 'confirm']
-    if not ready_orders:
+# 7.3 VIEW LEAD / MANAGEMENT
+elif menu == "🧾 Orders" and sub_menu == "View Lead":
+    st.subheader("📋 Leads Management Table")
+    if st.session_state.orders:
+        df = pd.DataFrame(st.session_state.orders)
+        st.dataframe(df[['order_id', 'customer', 'phone', 'item', 'total_amt', 'status']])
+        
+        # Action Buttons
+        for idx, o in enumerate(st.session_state.orders):
+            with st.expander(f"Action for {o['order_id']} - {o['customer']}"):
+                c1, c2, c3, c4 = st.columns(4)
+                if c1.button("Confirm ✅", key=f"conf_{idx}"):
+                    st.session_state.orders[idx]['status'] = 'confirm'; st.rerun()
+                if c2.button("No Answer ☎️", key=f"no_{idx}"):
+                    st.session_state.orders[idx]['status'] = 'noanswer'; st.rerun()
+                if c3.button("Cancel ❌", key=f"can_{idx}"):
+                    st.session_state.orders[idx]['status'] = 'cancel'; st.rerun()
+                if c4.button("Ship 🚚", key=f"ship_{idx}"):
+                    st.session_state.orders[idx]['status'] = 'shipped'; st.rerun()
+
+# 7.4 PRINT WAYBILL / DISPATCH
+elif menu == "🚚 Shipped Items" and sub_menu == "Ship":
+    st.subheader("🚚 Dispatch & Waybill Printing")
+    confirm_orders = [o for o in st.session_state.orders if o['status'] == 'confirm']
+    if not confirm_orders:
         st.write("No confirmed orders to ship.")
     else:
-        for idx, ro in enumerate(ready_orders):
-            col_a, col_b = st.columns([3, 1])
-            col_a.info(f"Order: {ro['order_id']} | {ro['customer']} | LKR {ro['total']}")
-            if col_b.button(f"Print & Dispatch", key=f"prnt_{idx}"):
-                # Dispatch කරද්දී status එක shipped වෙයි
-                for o in st.session_state.orders:
-                    if o['order_id'] == ro['order_id']:
-                        o['status'] = 'shipped'
-                
-                # WAYBILL PRINT PREVIEW (Pop-up style)
+        for idx, co in enumerate(confirm_orders):
+            st.markdown(f"**Order:** {co['order_id']} | **Customer:** {co['customer']}")
+            if st.button(f"Generate Waybill for {co['order_id']}", key=f"print_{idx}"):
                 st.markdown(f"""
-                <div style="background:white; color:black; padding:20px; border:2px solid black; margin-top:10px;">
-                    <h2 style="text-align:center;">HAPPY SHOP - WAYBILL</h2>
+                <div style="background:white; color:black; padding:20px; border:2px solid black; font-family:Arial;">
+                    <h2 style="text-align:center;">HAPPY SHOP WAYBILL</h2>
+                    <p><b>TO:</b> {co['customer']}<br><b>ADDR:</b> {co['address']}<br><b>TEL:</b> {co['phone']}</p>
                     <hr>
-                    <p><b>Order ID:</b> {ro['order_id']}</p>
-                    <p><b>To:</b> {ro['customer']}</p>
-                    <p><b>Address:</b> {ro['address']}</p>
-                    <p><b>Phone:</b> {ro['phone']}</p>
-                    <p><b>Product:</b> {ro['product']}</p>
-                    <p><b>COD Amount: LKR {ro['total']}</b></p>
-                    <hr>
-                    <p style="text-align:center; font-size:10px;">Thank you for shopping with Happy Shop!</p>
+                    <p><b>ITEM:</b> {co['item']} (Qty: {co['qty']})</p>
+                    <p style="font-size:20px;"><b>COD AMOUNT: LKR {co['total_amt']:.2f}</b></p>
                 </div>
-                <script>window.print();</script>
                 """, unsafe_allow_html=True)
-                st.success(f"Dispatched {ro['order_id']} Successfully!")
+                st.button("Click to Print (Ctrl+P)")
 
-elif sub_menu == "Dispatch List":
-    st.subheader("📦 Dispatched Orders (History)")
-    dispatched = [o for o in st.session_state.orders if o['status'] == 'shipped']
-    if dispatched:
-        st.table(pd.DataFrame(dispatched)[['order_id', 'customer', 'phone', 'total']])
-    else:
-        st.write("No items dispatched yet.")
+# --- 8. OTHER SECTIONS (Placeholder based on photos) ---
+else:
+    st.title(f"{menu} > {sub_menu}")
+    st.info("මෙම අංශය දැනට සැකසෙමින් පවතී. (Orders > Import Lead අංශය මෙන්)")
+
