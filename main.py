@@ -28,20 +28,21 @@ if "print_order" not in st.session_state:
     st.session_state.print_order = None
 
 # --------------------------------------------------
-# CSS
+# CSS (UI & PRINT DESIGN)
 # --------------------------------------------------
 st.markdown("""
 <style>
 .stApp { background:#0d1117; color:#c9d1d9; }
 [data-testid=stSidebar] { background:#161b22; }
 
+/* Dashboard Metrics */
 .metric-container {
     display:flex; gap:10px; flex-wrap:wrap;
-    position:sticky; top:0; z-index:999;
+    padding: 10px 0;
 }
 .m-card {
     padding:12px; border-radius:10px;
-    min-width:130px; text-align:center;
+    min-width:120px; text-align:center;
     font-weight:bold; color:white;
 }
 .bg-pending{background:#6c757d;}
@@ -51,21 +52,34 @@ st.markdown("""
 .bg-fake{background:#343a40;}
 .bg-shipped{background:#0dcaf0;}
 .bg-total{background:#007bff;}
-.val{font-size:24px;}
+.val{font-size:24px; display:block;}
 
+/* LOGO STYLING */
+.sidebar-logo {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    width: 80px;
+    border-radius: 50%;
+    border: 3px solid #ffa500;
+}
+
+/* WAYBILL PRINT DESIGN */
 @media print {
- body * { visibility:hidden; }
- .print-area, .print-area * {
-   visibility:visible;
- }
- .print-area {
-   position:absolute;
-   left:0; top:0;
-   width:500px;
-   background:white; color:black;
-   padding:15px;
-   border:2px solid black;
- }
+    body * { visibility:hidden; }
+    .print-area, .print-area * { visibility:visible; }
+    .print-area {
+        position:absolute; left:0; top:0; width:550px;
+        background:white !important; color:black !important;
+        padding:20px; border:2px solid black;
+        font-family: 'Arial', sans-serif;
+    }
+    .print-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid black; padding-bottom: 10px; }
+    .print-logo { width: 120px; }
+    .barcode-placeholder { font-size: 40px; font-family: 'Libre Barcode 39', cursive; text-align: center; margin: 10px 0; letter-spacing: 5px; }
+    .bill-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    .bill-table td, .bill-table th { border: 1px solid black; padding: 8px; text-align: left; font-size: 13px; }
+    .total-row { background: #f2f2f2 !important; font-weight: bold; font-size: 16px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -80,10 +94,15 @@ def new_order_id():
     return "HS-" + uuid.uuid4().hex[:8].upper()
 
 # --------------------------------------------------
-# SIDEBAR
+# SIDEBAR (LOGO ADDED)
 # --------------------------------------------------
 with st.sidebar:
-    st.markdown("<h2 style='color:#ffa500;text-align:center'>HAPPY SHOP</h2>", unsafe_allow_html=True)
+    # HAPPY SHOP LOGO
+    st.markdown("""
+        <img src="https://i.ibb.co/L9P8VvG/happy-shop-logo.png" class="sidebar-logo">
+        <h2 style='color:#ffa500;text-align:center;margin-top:10px;'>HAPPY SHOP</h2>
+    """, unsafe_allow_html=True)
+    
     menu = st.selectbox("MAIN MENU", [
         "🏠 Dashboard",
         "🧾 Orders",
@@ -117,140 +136,145 @@ st.markdown(f"""
 # NEW ORDER
 # --------------------------------------------------
 if sub == "New Order":
-    st.subheader("📝 New Order")
-
+    st.subheader("📝 New Order Entry")
     with st.form("order_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
-
         with c1:
             name = st.text_input("Customer Name *")
             phone = st.text_input("Phone *")
             address = st.text_area("Address *")
             city = st.text_input("City")
-
         with c2:
             product = st.selectbox("Product", list(st.session_state.stocks.keys()))
             qty = st.number_input("Qty", min_value=1, value=1)
             price = st.number_input("Price", value=2950.0)
             delivery = st.number_input("Delivery", value=350.0)
             discount = st.number_input("Discount", value=0.0)
-
         submit = st.form_submit_button("SAVE ORDER")
 
     if submit:
         if not name or not phone:
             st.error("Name & Phone required")
-        elif any(o["customer"]["phone"] == phone for o in st.session_state.orders.values()):
-            st.warning("Duplicate Lead Detected")
         else:
             oid = new_order_id()
             st.session_state.orders[oid] = {
-                "customer": {
-                    "name": name,
-                    "phone": phone,
-                    "address": address,
-                    "city": city
-                },
-                "order": {
-                    "product": product,
-                    "qty": qty,
-                    "price": price,
-                    "delivery": delivery,
-                    "discount": discount,
-                    "total": price * qty + delivery - discount,
-                    "status": "pending"
-                },
-                "history": [
-                    {"status": "pending", "time": str(datetime.now())}
-                ],
+                "customer": {"name": name, "phone": phone, "address": address, "city": city},
+                "order": {"product": product, "qty": qty, "price": price, "delivery": delivery, "discount": discount, 
+                          "total": price * qty + delivery - discount, "status": "pending"},
                 "date": str(date.today())
             }
             st.success(f"Order {oid} created")
             st.rerun()
 
 # --------------------------------------------------
-# VIEW LEADS
+# VIEW LEADS (WITH FAKE BUTTON)
 # --------------------------------------------------
 elif sub == "View Leads":
-    st.subheader("📋 Leads")
-
+    st.subheader("📋 Leads Management")
     for oid, o in st.session_state.orders.items():
         with st.expander(f"{oid} | {o['customer']['name']} ({o['order']['status']})"):
-            st.write(o["customer"])
-
+            st.write(f"📞 {o['customer']['phone']} | 📍 {o['customer']['address']}, {o['customer']['city']}")
             c = st.columns(4)
-            if c[0].button("Confirm", key=f"c{oid}"):
-                o["order"]["status"] = "confirm"
-            if c[1].button("No Answer", key=f"n{oid}"):
-                o["order"]["status"] = "noanswer"
-            if c[2].button("Cancel", key=f"x{oid}"):
-                o["order"]["status"] = "cancel"
-            if c[3].button("Fake", key=f"f{oid}"):
-                o["order"]["status"] = "fake"
-
-# --------------------------------------------------
-# DISPATCH & PRINT
-# --------------------------------------------------
-elif menu == "🚚 Dispatch":
-    st.subheader("🚚 Dispatch & Print")
-
-    for oid, o in st.session_state.orders.items():
-        if o["order"]["status"] == "confirm":
-            st.markdown(f"""
-            <div class="print-area">
-                <h3>Herbal Crown Pvt Ltd</h3>
-                <hr>
-                <b>Order:</b> {oid}<br>
-                <b>Date:</b> {o['date']}<br><br>
-
-                <b>Customer</b><br>
-                {o['customer']['name']}<br>
-                {o['customer']['address']}<br>
-                {o['customer']['phone']}<br><br>
-
-                <b>Product:</b> {o['order']['product']}<br>
-                <b>Qty:</b> {o['order']['qty']}<br>
-                <b>Total:</b> LKR {o['order']['total']:.2f}
-            </div>
-            """, unsafe_allow_html=True)
-
-            if st.button(f"🖨 Print & Ship {oid}", key=f"p{oid}"):
-                st.session_state.print_order = oid
+            if c[0].button("Confirm ✅", key=f"c{oid}"):
+                st.session_state.orders[oid]["order"]["status"] = "confirm"
+                st.rerun()
+            if c[1].button("No Answer ☎", key=f"n{oid}"):
+                st.session_state.orders[oid]["order"]["status"] = "noanswer"
+                st.rerun()
+            if c[2].button("Cancel ❌", key=f"x{oid}"):
+                st.session_state.orders[oid]["order"]["status"] = "cancel"
+                st.rerun()
+            if c[3].button("Fake ⚠️", key=f"f{oid}"):
+                st.session_state.orders[oid]["order"]["status"] = "fake"
                 st.rerun()
 
 # --------------------------------------------------
-# PRINT TRIGGER
+# DISPATCH & HERBAL CROWN WAYBILL
+# --------------------------------------------------
+elif menu == "🚚 Dispatch":
+    st.subheader("🚚 Ready to Dispatch")
+    confirmed_orders = {k: v for k, v in st.session_state.orders.items() if v["order"]["status"] == "confirm"}
+    
+    if not confirmed_orders:
+        st.info("No confirmed orders to display.")
+    
+    for oid, o in confirmed_orders.items():
+        # HERBAL CROWN PROFESSIONAL BILL DESIGN
+        st.markdown(f"""
+        <div class="print-area">
+            <div class="print-header">
+                <div>
+                    <img src="https://i.ibb.co/vYf3C7S/herbal-crown-logo.png" class="print-logo">
+                    <h2 style="margin:0;">Herbal Crown Pvt Ltd</h2>
+                </div>
+                <div style="text-align:right;">
+                    <b>ID:</b> {oid}<br>
+                    <b>Date:</b> {o['date']}
+                </div>
+            </div>
+            
+            <div class="barcode-placeholder">|||| ||| || |||| |||</div>
+            
+            <table class="bill-table">
+                <tr>
+                    <th style="width:50%">Customer Details</th>
+                    <th>Payment Summary</th>
+                </tr>
+                <tr>
+                    <td>
+                        <b>{o['customer']['name']}</b><br>
+                        {o['customer']['address']}<br>
+                        {o['customer']['city']}<br>
+                        <b>TP: {o['customer']['phone']}</b>
+                    </td>
+                    <td>
+                        Order Total: {o['order']['price'] * o['order']['qty']:.2f}<br>
+                        Delivery: {o['order']['delivery']:.2f}<br>
+                        Discount: -{o['order']['discount']:.2f}
+                    </td>
+                </tr>
+                <tr class="total-row">
+                    <td>Items: {o['order']['product']} (x{o['order']['qty']})</td>
+                    <td>Grand Total: LKR {o['order']['total']:.2f}</td>
+                </tr>
+            </table>
+            <p style="text-align:center; font-size:10px; margin-top:15px;">Thank you for shopping with Happy Shop!</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button(f"🖨 Print & Ship {oid}", key=f"p{oid}"):
+            st.session_state.print_order = oid
+            st.rerun()
+
+# --------------------------------------------------
+# AUTOMATIC PRINT & STOCK UPDATE
 # --------------------------------------------------
 if st.session_state.print_order:
     oid = st.session_state.print_order
+    # Status Update
     st.session_state.orders[oid]["order"]["status"] = "shipped"
-    st.session_state.stocks[
-        st.session_state.orders[oid]["order"]["product"]
-    ] -= st.session_state.orders[oid]["order"]["qty"]
+    # Stock Update
+    prod_name = st.session_state.orders[oid]["order"]["product"]
+    st.session_state.stocks[prod_name] -= st.session_state.orders[oid]["order"]["qty"]
 
-    st.components.v1.html("""
+    st.components.v1.html(f"""
     <script>
-      setTimeout(()=>{ window.print(); }, 500);
+      window.print();
+      setTimeout(() => {{ window.location.reload(); }}, 1000);
     </script>
     """, height=0)
-
     st.session_state.print_order = None
 
-# --------------------------------------------------
-# STOCKS
-# --------------------------------------------------
+# (Stocks & Tracking modules remain same or slightly updated)
 elif menu == "📦 Stocks":
-    st.subheader("📦 Stock Levels")
+    st.subheader("📦 Stock Inventory")
     st.table(st.session_state.stocks)
 
-# --------------------------------------------------
-# TRACKING
-# --------------------------------------------------
 elif menu == "🔍 Tracking":
     st.subheader("🔍 Order Tracking")
     q = st.text_input("Enter Phone Number")
-
     if q:
-        for oid, o in st.session_state.orders.items():
-            if q in o["customer"]["phone"]:
-                st.success(f"{oid} → {o['order']['status'].upper()}")
+        results = [f"{oid} -> {o['order']['status'].upper()}" for oid, o in st.session_state.orders.items() if q in o["customer"]["phone"]]
+        if results:
+            for r in results: st.success(r)
+        else: st.error("No records found.")
