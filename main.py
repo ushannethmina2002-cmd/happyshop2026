@@ -2,37 +2,41 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# --- 1. පේජ් එකේ සැකසුම් (මෙනු එක සහ ලේඅවුට් එක) ---
+# --- 1. පේජ් එකේ සැකසුම් ---
 st.set_page_config(
     page_title="HappyShop Official ERP", 
     page_icon="🛒", 
     layout="wide", 
-    initial_sidebar_state="expanded" # මෙනු එක හැමවෙලේම පේන්න තැබීම
+    initial_sidebar_state="expanded" 
 )
 
-# --- 2. සයිට් එකේ පෙනුම (CSS) - Screenshot එකේ පෙනුම ලබා ගැනීමට ---
+# --- 2. CSS STYLING (Hamburger Icon එක සුදු පාට කිරීම ඇතුළුව) ---
 st.markdown("""
     <style>
-    /* මුළු සයිට් එකම Dark පෙනුමක් ලබා දීම */
+    /* මුළු සයිට් එකම Dark පෙනුම */
     .stApp { background-color: #0d1117; color: white; }
     
-    /* වම් පැත්තේ Sidebar (මෙනු බාර්) එක තද නිල් පාට කිරීම */
+    /* ☰ Hamburger Menu Icon එක සුදු පාට කිරීම */
+    button[kind="headerNoPadding"] svg {
+        fill: white !important;
+        color: white !important;
+    }
+    
+    /* Sidebar එක තද නිල් පාට කිරීම */
     [data-testid="stSidebar"] {
         background-color: #001f3f !important;
         min-width: 260px !important;
-        border-right: 1px solid #30363d;
     }
     [data-testid="stSidebar"] * { color: white !important; }
 
-    /* මෙනු හෙඩර්ස් (Orange Color) */
+    /* මෙනු හෙඩර්ස් (Orange) */
     .menu-header {
         background-color: #e67e22;
         padding: 10px;
         font-weight: bold;
         border-radius: 8px;
-        margin: 15px 0px 5px 0px;
+        margin-top: 15px;
         text-align: center;
-        color: white;
     }
 
     /* කොටු (Boxes) ලස්සන කිරීම */
@@ -42,18 +46,25 @@ st.markdown("""
         border-radius: 12px;
         border: 1px solid #30363d;
         border-left: 6px solid #e67e22;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
     }
+    
+    /* Table විස්තර */
+    .stDataFrame { background-color: white; border-radius: 10px; }
 
-    /* අනවශ්‍ය Streamlit අංග සැඟවීම */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .stDeployButton {display:none;}
+    #MainMenu, footer, header {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. LOGIN පද්ධතිය ---
+# --- 3. ඩේටාබේස් එක (Temporary Data Storage) ---
+# සටහන: මෙය සර්වර් එක Restart වූ විට මැකේ. ස්ථිරව තැබීමට Google Sheets සම්බන්ධ කළ යුතුය.
+if 'orders_list' not in st.session_state:
+    st.session_state.orders_list = [
+        {"Date": "2026-02-06", "Name": "Wasantha Bandara", "Phone": "0773411920", "Address": "Matale", "Product": "Kesharaia Hair Oil", "Status": "Pending", "Total": 2500.0},
+        {"Date": "2026-02-05", "Name": "Nethmina", "Phone": "0712345678", "Address": "Kandy", "Product": "Herbal Crown", "Status": "Shipped", "Total": 3200.0}
+    ]
+
+# --- 4. LOGIN පද්ධතිය ---
 if 'user' not in st.session_state:
     st.session_state.user = None
 
@@ -62,102 +73,86 @@ def login_view():
     _, col2, _ = st.columns([1, 1.2, 1])
     with col2:
         st.markdown("<div class='section-box'>", unsafe_allow_html=True)
-        email = st.text_input("Username / Email")
-        pwd = st.text_input("Password", type="password")
-        if st.button("Log In to Dashboard", use_container_width=True):
-            if email == "happyshop@gmail.com" and pwd == "VLG0005":
-                st.session_state.user = {"name": "Admin", "role": "OWNER"}
-                st.rerun()
-            elif email == "demo1@gmail.com" and pwd == "demo1":
-                st.session_state.user = {"name": "Staff 01", "role": "STAFF"}
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
+        if st.button("Log In", use_container_width=True):
+            if u == "happyshop@gmail.com" and p == "VLG0005":
+                st.session_state.user = "Admin"
                 st.rerun()
             else:
-                st.error("විස්තර වැරදියි. නැවත උත්සාහ කරන්න.")
+                st.error("Login වැරදියි!")
         st.markdown("</div>", unsafe_allow_html=True)
 
-# --- 4. APP එකේ ඇතුලත (ප්‍රධාන කොටස) ---
+# --- 5. ප්‍රධාන මෙනු පාලනය ---
 if st.session_state.user is None:
     login_view()
 else:
-    # --- සයිඩ් බාර් මෙනු එක (ඔන්න මචං උඹ ඉල්ලපු මෙනු එක මෙතන තියෙනවා) ---
+    # --- සයිඩ් බාර් මෙනු එක ---
     with st.sidebar:
         st.markdown("<h2 style='text-align:center;'>🛒 HappyShop</h2>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align:center;'>User: <b>{st.session_state.user['name']}</b></p>", unsafe_allow_html=True)
-        st.markdown("---")
-        
-        # සාමාන්‍ය මෙනු අයිතම
-        st.write("🏠 Dashboard")
-        st.write("📦 GRN")
-        st.write("💸 Expense")
-        
-        # Orders මෙනු එක
         st.markdown("<div class='menu-header'>ORDERS</div>", unsafe_allow_html=True)
         choice = st.radio("Navigation", [
             "New Order", "Pending Orders", "Order Search", 
-            "Import Lead", "View Lead", "Add Lead", 
-            "Order History", "Exchanging Orders", "Blacklist Manager"
+            "Order History", "Blacklist Manager"
         ], label_visibility="collapsed")
         
-        # අනිත් අංශ
         st.markdown("<div class='menu-header'>SHIPPED & RETURN</div>", unsafe_allow_html=True)
-        st.write("🚚 Shipped Items")
-        st.write("🔄 Return Orders")
+        sub_choice = st.selectbox("System Logs", ["Shipped Items", "Return Orders"])
         
         st.markdown("<br><br>", unsafe_allow_html=True)
-        # Logout බටන් එක (Error එක එන්නේ නැති වෙන්න හැදුවා)
         if st.button("🚪 Log Out", use_container_width=True):
             st.session_state.user = None
             st.rerun()
 
-    # --- මෙනු එකේ තෝරන පේජ් එක අනුව පෙනුම වෙනස් වීම ---
+    # --- මෙනු එකේ පේජ් වලට අදාළ ඩේටා ---
     if choice == "New Order":
         st.markdown("## 📝 Customer / Waybill Entry")
-        
-        # පිටුව කොටස් දෙකකට බෙදීම (Screenshot එකේ තිබුණු විදිහට)
-        col_main, col_side = st.columns([1.6, 1], gap="large")
-        
-        with col_main:
+        c1, c2 = st.columns([1.6, 1], gap="large")
+        with c1:
             st.markdown("<div class='section-box'><b>👤 Customer Details</b>", unsafe_allow_html=True)
-            st.selectbox("Target User", ["All", "Registered", "Guest"])
-            st.text_input("Customer Name *", placeholder="Enter customer's name")
-            st.text_area("Address *", placeholder="Enter delivery address")
-            
-            c1, c2 = st.columns(2)
-            c1.selectbox("Select City *", ["Colombo", "Kandy", "Galle", "Matale"])
-            c2.selectbox("Select District *", ["Colombo", "Gampaha", "Kalutara", "Kandy"])
-            
-            p1, p2 = st.columns(2)
-            p1.text_input("Contact Number One *")
-            p2.text_input("Contact Number Two")
-            
-            st.date_input("Due Date", value=datetime.now())
-            st.selectbox("Order Source", ["FB Lead", "WhatsApp", "Web", "Call"])
-            st.selectbox("Payment Method", ["COD (Cash on Delivery)", "Bank Transfer"])
+            name = st.text_input("Customer Name *")
+            addr = st.text_area("Address *")
+            phone = st.text_input("Contact Number One *")
+            city = st.selectbox("Select City", ["Colombo", "Kandy", "Matale", "Galle"])
+            st.markdown("</div>", unsafe_allow_html=True)
+        with c2:
+            st.markdown("<div class='section-box'><b>📦 Product Info</b>", unsafe_allow_html=True)
+            prod = st.selectbox("Select Product", ["Kesharaia Hair Oil", "Herbal Crown", "Maas Go"])
+            amt = st.number_input("Sale Amount", min_value=0.0)
+            if st.button("🚀 SAVE ORDER", use_container_width=True):
+                new_order = {
+                    "Date": str(datetime.now().date()), "Name": name, 
+                    "Phone": phone, "Address": addr, "Product": prod, 
+                    "Status": "Pending", "Total": amt
+                }
+                st.session_state.orders_list.append(new_order)
+                st.success("ඕඩර් එක සාර්ථකව සේව් කළා!")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with col_side:
-            st.markdown("<div class='section-box'><b>📦 Product & Pricing</b>", unsafe_allow_html=True)
-            st.selectbox("Select Product *", [
-                "Kesharaia Hair Oil [VGLS0005]", 
-                "Herbal Crown: 1 [VGLS0001]", 
-                "Maas Go Capsules [VGLS0006]"
-            ])
-            st.number_input("Qty", min_value=1, value=1)
-            st.number_input("Sale Amount (LKR)", min_value=0.0)
-            st.text_area("Product Note", height=80)
-            st.number_input("Discount", min_value=0.0)
-            
-            st.markdown("<b>🚚 Courier Info</b>", unsafe_allow_html=True)
-            st.selectbox("Courier Company", ["Royal Express", "Koombiyo", "Domex"])
-            st.number_input("Delivery Charge", min_value=0.0)
-            
-            st.divider()
-            st.markdown("<h3 style='text-align:right;'>Total: Rs. 0.00</h3>", unsafe_allow_html=True)
-            
-            if st.button("🚀 SAVE & PROCESS ORDER", use_container_width=True):
-                st.success("Order Saved Successfully!")
-            st.markdown("</div>", unsafe_allow_html=True)
+    elif choice == "Pending Orders":
+        st.header("⏳ Pending Orders List")
+        df = pd.DataFrame(st.session_state.orders_list)
+        pending = df[df["Status"] == "Pending"]
+        if not pending.empty:
+            st.dataframe(pending, use_container_width=True)
+        else:
+            st.info("Pending ඕඩර්ස් කිසිවක් නැත.")
 
-    else:
-        st.write(f"### {choice}")
-        st.info("මෙම අංශය දැනට සකස් කරමින් පවතියි.")
+    elif choice == "Order Search":
+        st.header("🔍 Search for Orders")
+        q = st.text_input("නම හෝ දුරකථන අංකය ඇතුළත් කර සර්ච් කරන්න")
+        if q:
+            df = pd.DataFrame(st.session_state.orders_list)
+            res = df[df.apply(lambda row: q.lower() in str(row).lower(), axis=1)]
+            st.dataframe(res, use_container_width=True)
+        else:
+            st.info("සෙවීමට විස්තර ඇතුළත් කරන්න.")
+
+    elif choice == "Order History":
+        st.header("📜 Complete Order History")
+        df = pd.DataFrame(st.session_state.orders_list)
+        st.dataframe(df, use_container_width=True)
+
+    elif choice == "Blacklist Manager":
+        st.header("🚫 Blacklist Manager")
+        st.error("දැනට කිසිදු පාරිභෝගිකයෙකු බ්ලැක්ලිස්ට් කර නැ
