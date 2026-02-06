@@ -6,90 +6,87 @@ from datetime import datetime
 st.set_page_config(
     page_title="HappyShop Official ERP",
     page_icon="🛒",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# --- 2. CSS: සුදු මෙනු බාර් එක සහ Sidebar එක හැඩ ගැන්වීම ---
+# --- 2. CSS & HTML (උඹ එවපු Side Menu Layout එක) ---
 st.markdown("""
     <style>
     /* මුළු පසුබිම */
-    .stApp { background-color: #0d1117; color: white; padding-top: 60px; }
+    .stApp { background-color: #f8f9fa; color: #333; }
 
-    /* --- WHITE HEADER (උඹ එවපු HTML එකේ විදියට) --- */
-    .custom-header {
+    /* --- TOP BAR --- */
+    .top-bar {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
-        background-color: #ffffff;
-        padding: 12px 25px;
+        background: #ffffff;
+        padding: 12px 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        z-index: 1000;
+        z-index: 999;
     }
-    .menu-logo { font-weight: bold; font-size: 20px; color: #000; }
-    .menu-links a {
-        margin-left: 20px;
-        text-decoration: none;
+
+    .menu-btn {
+        font-size: 26px;
+        cursor: pointer;
+        margin-right: 15px;
         color: #333;
-        font-weight: 600;
-        font-family: 'Arial', sans-serif;
     }
 
-    /* --- SIDEBAR සැකසුම් --- */
+    .brand-name {
+        font-weight: bold;
+        font-size: 20px;
+        color: #333;
+    }
+
+    /* --- CUSTOM SIDE MENU (උඹ එවපු විදිහටම) --- */
+    /* Streamlit Sidebar එක වෙනුවට මේක පාවිච්චි කරමු */
     [data-testid="stSidebar"] {
-        background-color: #001529 !important;
-        padding-top: 60px; /* Header එකට ඉඩ තැබීමට */
-    }
-    [data-testid="stSidebar"] * { color: white !important; }
-
-    /* Hamburger Icon (ඉරි 3) කළු පාට කිරීම (සුදු පසුබිමේ පේන්න) */
-    [data-testid="stHeader"] button svg { 
-        fill: #000000 !important; 
-        width: 30px;
-        height: 30px;
+        background-color: #ffffff !important;
+        border-right: 1px solid #eee;
     }
     
-    /* Section Boxes */
-    .section-box {
-        background-color: #161b22;
-        padding: 20px;
-        border-radius: 10px;
-        border: 1px solid #30363d;
-        border-left: 5px solid #e67e22;
+    [data-testid="stSidebar"] * {
+        color: #333 !important;
     }
 
-    /* Streamlit ගේ සාමාන්‍ය Header එක අයින් කිරීම */
-    header[data-testid="stHeader"] { background-color: transparent; }
+    /* කොටු ලස්සන කිරීම */
+    .section-box {
+        background-color: #ffffff;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid #eef0f2;
+        margin-top: 80px; /* Top bar එකට යට නොවීමට */
+    }
+
+    /* Streamlit Default Header අයින් කිරීම */
+    header {visibility: hidden;}
     #MainMenu, footer {visibility: hidden;}
     </style>
-    
-    <div class="custom-header">
-        <div class="menu-logo">HappyShop Official ERP</div>
-        <div class="menu-links">
-            <a href="#">Home</a>
-            <a href="#">Odds</a>
-            <a href="#">VIP</a>
-            <a href="#">Contact</a>
-        </div>
+
+    <div class="top-bar">
+        <span class="menu-btn">☰</span>
+        <div class="brand-name">My Odds System / HappyShop ERP</div>
     </div>
     """, unsafe_allow_html=True)
 
-# --- 3. SESSION DATA & LOGIN ---
+# --- 3. SESSION STATE (දත්ත සහ Login) ---
 if 'user' not in st.session_state:
     st.session_state.user = None
 if 'orders' not in st.session_state:
     st.session_state.orders = []
 
-# --- 4. LOGIN INTERFACE ---
+# --- 4. LOGIN පද්ධතිය ---
 if st.session_state.user is None:
-    st.markdown("<br><br><h1 style='text-align: center; color: #f1c40f;'>System Login</h1>", unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
         st.markdown("<div class='section-box'>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align:center;'>System Login</h2>", unsafe_allow_html=True)
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
         if st.button("Log In", use_container_width=True):
@@ -100,46 +97,51 @@ if st.session_state.user is None:
                 st.error("විස්තර වැරදියි!")
         st.markdown("</div>", unsafe_allow_html=True)
 else:
-    # --- 5. SIDEBAR (ස්ථිරවම පවතින මෙනු එක) ---
+    # --- 5. SIDEBAR MENU (උඹ එවපු Menu Links ටික) ---
     with st.sidebar:
-        st.markdown("<h2 style='text-align:center;'>MANAGER</h2>", unsafe_allow_html=True)
-        st.markdown("---")
-        
-        main_choice = st.radio("Navigation", [
-            "🏠 Dashboard", "📦 GRN", "💸 Expense", "🛒 Orders", 
-            "🚚 Shipped Items", "🔄 Return", "📊 Stocks", "🏷️ Products"
-        ])
-
         st.markdown("<br><br>", unsafe_allow_html=True)
-        if st.button("🚪 Log Out", use_container_width=True):
+        st.markdown("### 🗄️ Navigation")
+        choice = st.radio("Menu", [
+            "Home", "Live Odds", "VIP Tips", "Results", "New Order", "Order Search", "Contact"
+        ])
+        
+        st.markdown("---")
+        if st.button("Logout"):
             st.session_state.user = None
             st.rerun()
 
-    # --- 6. පේජ් වලට අදාළ ඩේටා ---
-    if "Orders" in main_choice:
-        sub = st.selectbox("Order Section", ["New Order", "Order Search", "Pending Orders"])
+    # --- 6. අදාළ පේජ් වල ඩේටා (FEATURES) ---
+    st.markdown("<div class='section-box'>", unsafe_allow_html=True)
+    
+    if choice == "Home":
+        st.subheader("🏠 Welcome to Dashboard")
+        st.write("පද්ධතියේ සාරාංශය මෙහි පෙන්වයි.")
         
-        if sub == "New Order":
-            st.markdown("### 📝 Create New Order")
-            c1, c2 = st.columns([2, 1])
-            with c1:
-                st.markdown("<div class='section-box'><b>👤 Customer</b>", unsafe_allow_html=True)
-                name = st.text_input("Customer Name")
-                phone = st.text_input("Phone")
-                st.markdown("</div>", unsafe_allow_html=True)
-            with c2:
-                st.markdown("<div class='section-box'><b>📦 Pricing</b>", unsafe_allow_html=True)
-                amt = st.number_input("Amount", min_value=0.0)
-                if st.button("Save", use_container_width=True):
-                    st.session_state.orders.append({"Date": str(datetime.now().date()), "Name": name, "Phone": phone, "Total": amt})
-                    st.success("Saved!")
-                st.markdown("</div>", unsafe_allow_html=True)
-        
-        elif sub == "Order Search":
-            st.markdown("### 🔍 Leads / Order Search")
-            df = pd.DataFrame(st.session_state.orders)
-            st.table(df)
+    elif choice == "Live Odds":
+        st.subheader("📊 Live Odds System")
+        st.info("දැනට ක්‍රියාත්මක වන Odds මෙතැනින් බලන්න.")
 
-    else:
-        st.header(main_choice)
-        st.info("මෙම කොටස සකස් කරමින් පවතී.")
+    elif choice == "New Order":
+        st.subheader("📝 Create New Order")
+        c1, c2 = st.columns(2)
+        with c1:
+            name = st.text_input("Customer Name")
+            phone = st.text_input("Phone Number")
+        with c2:
+            item = st.selectbox("Product", ["Hair Oil", "Herbal Pack"])
+            price = st.number_input("Price")
+        
+        if st.button("Save Order"):
+            st.session_state.orders.append({"Date": str(datetime.now().date()), "Name": name, "Phone": phone, "Item": item, "Price": price})
+            st.success("Order Saved Successfully!")
+
+    elif choice == "Order Search":
+        st.subheader("🔍 Order History / Search")
+        if st.session_state.orders:
+            df = pd.DataFrame(st.session_state.orders)
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.warning("දත්ත කිසිවක් නැත.")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
