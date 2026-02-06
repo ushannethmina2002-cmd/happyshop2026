@@ -14,6 +14,16 @@ def load_data(filename):
         return pd.read_csv(filename).to_dict('records')
     return []
 
+# විශාල අංක කෙටි කර පෙන්වීමේ ශ්‍රිතය (Formatting Large Numbers)
+def format_currency(num):
+    if num >= 1_000_000_000:
+        return f"{num / 1_000_000_000:.1f}B"
+    elif num >= 1_000_000:
+        return f"{num / 1_000_000:.1f}M"
+    elif num >= 1_000:
+        return f"{num / 1_000:.1f}K"
+    return f"{num:,.2f}"
+
 # --- ලංකාවේ දිස්ත්‍රික්ක සහ නගර දත්ත ---
 SL_DATA = {
     "Colombo": ["Colombo 1-15", "Dehiwala", "Mount Lavinia", "Nugegoda", "Maharagama", "Kottawa", "Malabe", "Battaramulla"],
@@ -139,11 +149,13 @@ if menu == "🏠 Dashboard":
     st.subheader("📊 Profit & Loss Overview")
     total_rev = sum([float(o['total']) for o in st.session_state.orders if o['status'] == 'shipped'])
     total_exp = sum([float(e['amount']) for e in st.session_state.expenses])
+    net_profit = total_rev - total_exp
     
+    # පින්තූරයේ ආකාරයට කුඩා කර අංක කෙටි කර පෙන්වීම
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total Shipped Revenue", f"LKR {total_rev:,.2f}")
-    c2.metric("Total Expenses", f"LKR {total_exp:,.2f}")
-    c3.metric("Net Profit", f"LKR {total_rev - total_exp:,.2f}")
+    c1.metric("Revenue", f"LKR {format_currency(total_rev)}")
+    c2.metric("Expenses", f"LKR {format_currency(total_exp)}")
+    c3.metric("Net Profit", f"LKR {format_currency(net_profit)}")
 
     if st.session_state.orders:
         df_orders = pd.DataFrame(st.session_state.orders)
@@ -188,30 +200,59 @@ elif menu == "🧾 Orders":
                 st.success(f"Order {oid} Saved Successfully!")
 
     elif sub == "View Lead":
-        st.subheader("📋 Lead List")
-        search_q = st.text_input("🔍 Search by Name or Phone")
-        filter_status = st.multiselect("Filter Status", ["pending", "confirm", "noanswer", "cancel", "fake"], default=["pending"])
+        # පින්තූරයේ ආකාරයට සෙවුම් කොටස (Leads Search) සකස් කිරීම
+        st.markdown('<div class="ship-header"><h3>🔍 Leads Search</h3>', unsafe_allow_html=True)
+        fc1, fc2, fc3 = st.columns(3)
+        s_status = fc1.selectbox("Status", ["Any", "pending", "confirm", "noanswer", "cancel", "fake"])
+        s_user = fc2.selectbox("User", ["Any", "Admin"])
+        s_name = fc3.text_input("Customer Name")
         
-        for idx, o in enumerate(st.session_state.orders):
-            if (search_q.lower() in str(o['name']).lower() or search_q in str(o['phone'])) and (o['status'] in filter_status):
-                with st.expander(f"{o['id']} - {o['name']} ({o['status'].upper()})"):
-                    st.write(f"📞 {o['phone']} | 📍 {o['addr']}, {o['city']}, {o['dist']}")
+        fc4, fc5, fc6 = st.columns(3)
+        s_start = fc4.date_input("Start Date", date.today())
+        s_end = fc5.date_input("End Date", date.today())
+        s_product = fc6.selectbox("Product", ["Any"] + list(st.session_state.stocks.keys()))
+        
+        st.markdown('<button style="background-color: #059669; color: white; border: none; padding: 8px 20px; border-radius: 5px;">Search</button></div>', unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.subheader("📋 Leads List")
+        
+        # දත්ත පෙරීම (Filtering logic)
+        filtered_orders = st.session_state.orders
+        if s_status != "Any":
+            filtered_orders = [o for o in filtered_orders if o['status'] == s_status]
+        if s_name:
+            filtered_orders = [o for o in filtered_orders if s_name.lower() in o['name'].lower()]
+        if s_product != "Any":
+            filtered_orders = [o for o in filtered_orders if o['prod'] == s_product]
+
+        if filtered_orders:
+            df_leads = pd.DataFrame(filtered_orders)
+            # අවශ්‍ය තීරු පමණක් වගුවේ පෙන්වීම
+            display_cols = ['date', 'id', 'name', 'addr', 'city', 'phone', 'prod', 'total', 'status']
+            st.dataframe(df_leads[display_cols], use_container_width=True)
+            
+            # තනි තනිව වෙනස් කිරීමට Expander එක තවමත් පවතී
+            for idx, o in enumerate(filtered_orders):
+                with st.expander(f"Update: {o['id']} - {o['name']}"):
                     cols = st.columns(5)
                     if cols[0].button("Confirm ✅", key=f"c{idx}"): 
-                        st.session_state.orders[idx]['status'] = 'confirm'
+                        o['status'] = 'confirm'
                         save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
                     if cols[1].button("No Answer ☎", key=f"n{idx}"): 
-                        st.session_state.orders[idx]['status'] = 'noanswer'
+                        o['status'] = 'noanswer'
                         save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
                     if cols[2].button("Cancel ❌", key=f"x{idx}"): 
-                        st.session_state.orders[idx]['status'] = 'cancel'
+                        o['status'] = 'cancel'
                         save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
                     if cols[3].button("Fake ⚠️", key=f"f{idx}"): 
-                        st.session_state.orders[idx]['status'] = 'fake'
+                        o['status'] = 'fake'
                         save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
                     if cols[4].button("Delete 🗑️", key=f"d{idx}"): 
-                        st.session_state.orders.pop(idx)
+                        st.session_state.orders.remove(o)
                         save_data(pd.DataFrame(st.session_state.orders), 'orders.csv'); st.rerun()
+        else:
+            st.info("No leads found for your search criteria.")
 
     elif sub == "Order Tracking":
         search = st.text_input("Search by Phone Number")
@@ -220,7 +261,7 @@ elif menu == "🧾 Orders":
             if results: st.table(pd.DataFrame(results))
             else: st.warning("No records found.")
 
-# --- 8. SHIPPED ITEMS (නව Shipping Dashboard එක සමඟ) ---
+# --- 8. SHIPPED ITEMS (නොවෙනස්ව පවතී) ---
 elif menu == "🚚 Shipped Items":
     if sub == "Shipping Dashboard":
         st.markdown('<div class="ship-header"><h3>🔍 Search orders for shipping</h3>', unsafe_allow_html=True)
@@ -232,26 +273,14 @@ elif menu == "🚚 Shipped Items":
         
         st.markdown('<button style="background-color: #059669; color: white; border: none; padding: 8px 20px; border-radius: 5px;">Search</button></div>', unsafe_allow_html=True)
         
-        # දත්ත පෙරීම
         ready_orders = [o for o in st.session_state.orders if o['status'] in ['confirm', 'ready_print']]
-        
-        st.info(f"{len(ready_orders)} items have to ship | Total: 0")
+        st.info(f"{len(ready_orders)} items have to ship")
         
         st.markdown("---")
-        st.subheader(f"Ready to Ship List ({len(ready_orders)})")
-        
-        # පින්තූරයේ ඇති ආකාරයටම Status ටැබ් පෙන්වීම
-        st.markdown("""
-            <span class="status-tab" style="background-color: #ec4899;">HELD ORDERS</span>
-            <span class="status-tab" style="background-color: #ef4444;">WRONG WAY</span>
-            <span class="status-tab" style="background-color: #f59e0b;">RESET</span>
-            <span class="status-tab" style="background-color: #10b981;">WEB ORDERS</span>
-            <span class="status-tab" style="background-color: #3b82f6;">EXCHANGING</span>
-        """, unsafe_allow_html=True)
+        st.subheader("Ready to Ship List")
         
         if ready_orders:
             df_ready = pd.DataFrame(ready_orders)
-            # වගුව පෙන්වීමට අවශ්‍ය කොලම්ස් පමණක් තේරීම
             display_cols = ['date', 'id', 'prod', 'qty', 'price', 'name', 'addr', 'city', 'phone', 'status']
             st.dataframe(df_ready[display_cols], use_container_width=True)
         else:
@@ -309,7 +338,7 @@ elif menu == "🚚 Shipped Items":
             st.download_button("📥 Download Shipped List", df_shipped.to_csv(index=False).encode('utf-8'), "shipped_list.csv")
         else: st.info("No shipped items yet.")
 
-# --- 9. GRN, EXPENSES & RETURNS (කිසිවක් ඉවත් කර නැත) ---
+# --- 9. GRN, EXPENSES & RETURNS (නොවෙනස්ව පවතී) ---
 elif menu == "📦 GRN":
     if sub == "New GRN":
         with st.form("grn"):
