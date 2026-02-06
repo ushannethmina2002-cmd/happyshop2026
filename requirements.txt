@@ -1,6 +1,2 @@
 streamlit
 pandas
-bcrypt
-streamlit
-pandas
-
