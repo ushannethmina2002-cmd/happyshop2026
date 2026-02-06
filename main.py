@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 # --------------------------------------------------
-# SESSION STATE INIT
+# SESSION STATE INIT (Data Stability)
 # --------------------------------------------------
 if "orders" not in st.session_state:
     st.session_state.orders = {}
@@ -24,62 +24,42 @@ if "stocks" not in st.session_state:
         "Kalkaya": 75
     }
 
-if "print_order" not in st.session_state:
-    st.session_state.print_order = None
-
 # --------------------------------------------------
-# CSS (UI & PRINT DESIGN)
+# PROFESSIONAL CSS (UI & PRINT DESIGN)
 # --------------------------------------------------
 st.markdown("""
 <style>
+/* Dashboard Theme */
 .stApp { background:#0d1117; color:#c9d1d9; }
 [data-testid=stSidebar] { background:#161b22; }
 
-/* Dashboard Metrics */
-.metric-container {
-    display:flex; gap:10px; flex-wrap:wrap;
-    padding: 10px 0;
-}
-.m-card {
-    padding:12px; border-radius:10px;
-    min-width:120px; text-align:center;
-    font-weight:bold; color:white;
-}
-.bg-pending{background:#6c757d;}
-.bg-confirm{background:#28a745;}
-.bg-noanswer{background:#ffc107;color:black;}
-.bg-cancel{background:#dc3545;}
-.bg-fake{background:#343a40;}
-.bg-shipped{background:#0dcaf0;}
-.bg-total{background:#007bff;}
+/* Metrics Styling */
+.metric-container { display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 20px; }
+.m-card { padding:12px; border-radius:10px; min-width:120px; text-align:center; font-weight:bold; color:white; }
+.bg-pending{background:#6c757d;} .bg-confirm{background:#28a745;} 
+.bg-noanswer{background:#ffc107;color:black;} .bg-cancel{background:#dc3545;}
+.bg-fake{background:#343a40;} .bg-shipped{background:#0dcaf0;} .bg-total{background:#007bff;}
 .val{font-size:24px; display:block;}
 
-/* LOGO STYLING */
-.sidebar-logo {
-    display: block;
-    margin-left: auto;
-    margin-right: auto;
-    width: 80px;
-    border-radius: 50%;
-    border: 3px solid #ffa500;
-}
+/* SIDEBAR LOGO */
+.sb-logo { display: block; margin: 0 auto 10px auto; width: 100px; border-radius: 50%; border: 3px solid #ffa500; }
 
-/* WAYBILL PRINT DESIGN */
+/* HERBAL CROWN WAYBILL DESIGN (Fixed for Printing) */
 @media print {
     body * { visibility:hidden; }
     .print-area, .print-area * { visibility:visible; }
     .print-area {
         position:absolute; left:0; top:0; width:550px;
         background:white !important; color:black !important;
-        padding:20px; border:2px solid black;
-        font-family: 'Arial', sans-serif;
+        padding:15px; border:2px solid black; font-family: 'Arial', sans-serif;
     }
-    .print-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid black; padding-bottom: 10px; }
-    .print-logo { width: 120px; }
-    .barcode-placeholder { font-size: 40px; font-family: 'Libre Barcode 39', cursive; text-align: center; margin: 10px 0; letter-spacing: 5px; }
-    .bill-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    .bill-table td, .bill-table th { border: 1px solid black; padding: 8px; text-align: left; font-size: 13px; }
-    .total-row { background: #f2f2f2 !important; font-weight: bold; font-size: 16px; }
+    .bill-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid black; padding-bottom: 5px; }
+    .barcode-section { display: flex; border-bottom: 2px solid black; }
+    .barcode-box { flex: 3; text-align: center; border-right: 2px solid black; padding: 10px; font-size: 35px; letter-spacing: 5px; }
+    .qty-box { flex: 1; text-align: center; padding: 10px; font-size: 20px; font-weight: bold; }
+    .bill-table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+    .bill-table td, .bill-table th { border: 1px solid black; padding: 6px; font-size: 13px; text-align: left; }
+    .total-row { background: #f2f2f2 !important; font-weight: bold; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -90,35 +70,21 @@ st.markdown("""
 def count_status(s):
     return len([o for o in st.session_state.orders.values() if o["order"]["status"] == s])
 
-def new_order_id():
-    return "HS-" + uuid.uuid4().hex[:8].upper()
-
 # --------------------------------------------------
-# SIDEBAR (LOGO ADDED)
+# SIDEBAR (Happy Shop Logo Added)
 # --------------------------------------------------
 with st.sidebar:
-    # HAPPY SHOP LOGO
     st.markdown("""
-        <img src="https://i.ibb.co/L9P8VvG/happy-shop-logo.png" class="sidebar-logo">
-        <h2 style='color:#ffa500;text-align:center;margin-top:10px;'>HAPPY SHOP</h2>
+        <img src="https://i.ibb.co/L9P8VvG/happy-shop-logo.png" class="sb-logo">
+        <h2 style='color:#ffa500;text-align:center;'>HAPPY SHOP</h2>
     """, unsafe_allow_html=True)
     
-    menu = st.selectbox("MAIN MENU", [
-        "🏠 Dashboard",
-        "🧾 Orders",
-        "🚚 Dispatch",
-        "📦 Stocks",
-        "🔍 Tracking"
-    ])
-
+    menu = st.selectbox("MAIN NAVIGATION", ["🏠 Dashboard", "🧾 Orders", "🚚 Dispatch", "📦 Stocks", "🔍 Tracking"])
     sub = ""
-    if menu == "🧾 Orders":
-        sub = st.radio("Orders", ["New Order", "View Leads"])
-    if menu == "🚚 Dispatch":
-        sub = "Dispatch"
+    if menu == "🧾 Orders": sub = st.radio("Actions", ["New Order", "View Leads"])
 
 # --------------------------------------------------
-# METRICS
+# TOP METRICS
 # --------------------------------------------------
 st.markdown(f"""
 <div class="metric-container">
@@ -133,148 +99,92 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------
-# NEW ORDER
+# NEW ORDER (Full Fields)
 # --------------------------------------------------
 if sub == "New Order":
     st.subheader("📝 New Order Entry")
-    with st.form("order_form", clear_on_submit=True):
+    with st.form("main_order_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
             name = st.text_input("Customer Name *")
             phone = st.text_input("Phone *")
             address = st.text_area("Address *")
             city = st.text_input("City")
+            district = st.selectbox("District", ["Colombo", "Gampaha", "Kandy", "Galle", "Other"])
         with c2:
             product = st.selectbox("Product", list(st.session_state.stocks.keys()))
             qty = st.number_input("Qty", min_value=1, value=1)
             price = st.number_input("Price", value=2950.0)
+            weight = st.number_input("Weight (kg)", value=0.5)
+            courier = st.selectbox("Courier", ["Koombiyo", "Domex", "Pronto"])
             delivery = st.number_input("Delivery", value=350.0)
             discount = st.number_input("Discount", value=0.0)
-        submit = st.form_submit_button("SAVE ORDER")
-
-    if submit:
-        if not name or not phone:
-            st.error("Name & Phone required")
-        else:
-            oid = new_order_id()
-            st.session_state.orders[oid] = {
-                "customer": {"name": name, "phone": phone, "address": address, "city": city},
-                "order": {"product": product, "qty": qty, "price": price, "delivery": delivery, "discount": discount, 
-                          "total": price * qty + delivery - discount, "status": "pending"},
-                "date": str(date.today())
-            }
-            st.success(f"Order {oid} created")
-            st.rerun()
+        
+        if st.form_submit_button("SAVE ORDER"):
+            if name and phone:
+                oid = "HS-" + uuid.uuid4().hex[:6].upper()
+                st.session_state.orders[oid] = {
+                    "customer": {"name": name, "phone": phone, "address": address, "city": city, "dist": district},
+                    "order": {"product": product, "qty": qty, "price": price, "delivery": delivery, 
+                              "discount": discount, "total": (price * qty) + delivery - discount, "status": "pending", "courier": courier},
+                    "date": str(date.today())
+                }
+                st.success(f"Order {oid} Saved!")
+                st.rerun()
 
 # --------------------------------------------------
-# VIEW LEADS (WITH FAKE BUTTON)
+# VIEW LEADS (Fake Button Added)
 # --------------------------------------------------
 elif sub == "View Leads":
     st.subheader("📋 Leads Management")
     for oid, o in st.session_state.orders.items():
         with st.expander(f"{oid} | {o['customer']['name']} ({o['order']['status']})"):
-            st.write(f"📞 {o['customer']['phone']} | 📍 {o['customer']['address']}, {o['customer']['city']}")
-            c = st.columns(4)
-            if c[0].button("Confirm ✅", key=f"c{oid}"):
-                st.session_state.orders[oid]["order"]["status"] = "confirm"
-                st.rerun()
-            if c[1].button("No Answer ☎", key=f"n{oid}"):
-                st.session_state.orders[oid]["order"]["status"] = "noanswer"
-                st.rerun()
-            if c[2].button("Cancel ❌", key=f"x{oid}"):
-                st.session_state.orders[oid]["order"]["status"] = "cancel"
-                st.rerun()
-            if c[3].button("Fake ⚠️", key=f"f{oid}"):
-                st.session_state.orders[oid]["order"]["status"] = "fake"
-                st.rerun()
+            st.write(f"📞 {o['customer']['phone']} | 📍 {o['customer']['address']}")
+            cols = st.columns(4)
+            if cols[0].button("Confirm ✅", key=f"c{oid}"): o["order"]["status"] = "confirm"; st.rerun()
+            if cols[1].button("No Answer ☎", key=f"n{oid}"): o["order"]["status"] = "noanswer"; st.rerun()
+            if cols[2].button("Cancel ❌", key=f"x{oid}"): o["order"]["status"] = "cancel"; st.rerun()
+            if cols[3].button("Fake ⚠️", key=f"f{oid}"): o["order"]["status"] = "fake"; st.rerun()
 
 # --------------------------------------------------
-# DISPATCH & HERBAL CROWN WAYBILL
+# DISPATCH & HERBAL CROWN BILL
 # --------------------------------------------------
 elif menu == "🚚 Dispatch":
-    st.subheader("🚚 Ready to Dispatch")
-    confirmed_orders = {k: v for k, v in st.session_state.orders.items() if v["order"]["status"] == "confirm"}
+    st.subheader("🚚 Ready to Print & Dispatch")
+    confirmed = {k: v for k, v in st.session_state.orders.items() if v["order"]["status"] == "confirm"}
     
-    if not confirmed_orders:
-        st.info("No confirmed orders to display.")
-    
-    for oid, o in confirmed_orders.items():
-        # HERBAL CROWN PROFESSIONAL BILL DESIGN
+    for oid, o in confirmed.items():
         st.markdown(f"""
         <div class="print-area">
-            <div class="print-header">
-                <div>
-                    <img src="https://i.ibb.co/vYf3C7S/herbal-crown-logo.png" class="print-logo">
-                    <h2 style="margin:0;">Herbal Crown Pvt Ltd</h2>
-                </div>
-                <div style="text-align:right;">
-                    <b>ID:</b> {oid}<br>
-                    <b>Date:</b> {o['date']}
-                </div>
+            <div class="bill-header">
+                <div><b style="font-size:18px;">Herbal Crown Pvt Ltd</b><br>TP: 0766066789</div>
+                <div style="text-align:right;">Date: {o['date']}<br>ID: {oid}</div>
             </div>
-            
-            <div class="barcode-placeholder">|||| ||| || |||| |||</div>
-            
+            <div class="barcode-section">
+                <div class="barcode-box">|||| |||| |||| ||||</div>
+                <div class="qty-box">QTY: {o['order']['qty']}</div>
+            </div>
+            <div style="padding:10px 0; font-weight:bold; border-bottom:1px solid black;">
+                {o['order']['product']} (x{o['order']['qty']})
+            </div>
             <table class="bill-table">
+                <tr><th style="width:50%;">Customer Details</th><th colspan="2">Order Summary</th></tr>
                 <tr>
-                    <th style="width:50%">Customer Details</th>
-                    <th>Payment Summary</th>
+                    <td rowspan="4"><b>{o['customer']['name']}</b><br>{o['customer']['address']}<br>{o['customer']['city']}<br>Tel: {o['customer']['phone']}</td>
+                    <td>Price</td><td>{o['order']['price']:.2f}</td>
                 </tr>
-                <tr>
-                    <td>
-                        <b>{o['customer']['name']}</b><br>
-                        {o['customer']['address']}<br>
-                        {o['customer']['city']}<br>
-                        <b>TP: {o['customer']['phone']}</b>
-                    </td>
-                    <td>
-                        Order Total: {o['order']['price'] * o['order']['qty']:.2f}<br>
-                        Delivery: {o['order']['delivery']:.2f}<br>
-                        Discount: -{o['order']['discount']:.2f}
-                    </td>
-                </tr>
-                <tr class="total-row">
-                    <td>Items: {o['order']['product']} (x{o['order']['qty']})</td>
-                    <td>Grand Total: LKR {o['order']['total']:.2f}</td>
-                </tr>
+                <tr><td>Delivery</td><td>{o['order']['delivery']:.2f}</td></tr>
+                <tr><td>Discount</td><td>{o['order']['discount']:.2f}</td></tr>
+                <tr class="total-row"><td>Grand Total</td><td>LKR {o['order']['total']:.2f}</td></tr>
             </table>
-            <p style="text-align:center; font-size:10px; margin-top:15px;">Thank you for shopping with Happy Shop!</p>
         </div>
         """, unsafe_allow_html=True)
+        
+        if st.button(f"🖨 Print {oid}", key=f"btn{oid}"):
+            # Update Stock & Status
+            st.session_state.stocks[o['order']['product']] -= o['order']['qty']
+            o["order"]["status"] = "shipped"
+            st.components.v1.html("<script>window.print(); setTimeout(() => { window.location.reload(); }, 1000);</script>", height=0)
 
-        if st.button(f"🖨 Print & Ship {oid}", key=f"p{oid}"):
-            st.session_state.print_order = oid
-            st.rerun()
-
-# --------------------------------------------------
-# AUTOMATIC PRINT & STOCK UPDATE
-# --------------------------------------------------
-if st.session_state.print_order:
-    oid = st.session_state.print_order
-    # Status Update
-    st.session_state.orders[oid]["order"]["status"] = "shipped"
-    # Stock Update
-    prod_name = st.session_state.orders[oid]["order"]["product"]
-    st.session_state.stocks[prod_name] -= st.session_state.orders[oid]["order"]["qty"]
-
-    st.components.v1.html(f"""
-    <script>
-      window.print();
-      setTimeout(() => {{ window.location.reload(); }}, 1000);
-    </script>
-    """, height=0)
-    st.session_state.print_order = None
-
-# (Stocks & Tracking modules remain same or slightly updated)
 elif menu == "📦 Stocks":
-    st.subheader("📦 Stock Inventory")
     st.table(st.session_state.stocks)
-
-elif menu == "🔍 Tracking":
-    st.subheader("🔍 Order Tracking")
-    q = st.text_input("Enter Phone Number")
-    if q:
-        results = [f"{oid} -> {o['order']['status'].upper()}" for oid, o in st.session_state.orders.items() if q in o["customer"]["phone"]]
-        if results:
-            for r in results: st.success(r)
-        else: st.error("No records found.")
