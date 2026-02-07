@@ -35,19 +35,20 @@ def initialize_database():
     if os.path.exists(file):
         try:
             df = pd.read_csv(file)
+            # Column ගණන හෝ නම් වෙනස් නම් Reset කරයි
             if list(df.columns) != COLS:
                 os.remove(file)
                 return pd.DataFrame(columns=COLS)
             return df
         except:
-            os.remove(file)
+            if os.path.exists(file): os.remove(file)
             return pd.DataFrame(columns=COLS)
     return pd.DataFrame(columns=COLS)
 
+# Session State එක හරහා දත්ත කළමනාකරණය
 if "db" not in st.session_state:
     st.session_state.db = initialize_database()
 
-# Stock දත්ත (පින්තූරවල තිබූ මිල ගණන් සමග)
 if "stock" not in st.session_state:
     st.session_state.stock = pd.DataFrame([
         {"Code": "KHO-01", "Product": "Kasharaja Hair Oil", "Qty": 225, "Price": 2950},
@@ -61,12 +62,16 @@ with st.sidebar:
     st.markdown("<h2 style='color: #FFD700;'>HAPPY SHOP ERP</h2>", unsafe_allow_html=True)
     menu = st.radio("GO TO MODULE", ["📊 Dashboard", "📝 Add/Manage Leads", "📦 Inventory"])
     st.divider()
+    
+    # පද්ධතියේ ගැටලු විසඳීමට ඇති එකම මාර්ගය
     if st.button("🔄 Clean & Fix System"):
         if os.path.exists("leads.csv"): os.remove("leads.csv")
+        st.session_state.db = pd.DataFrame(columns=COLS)
+        st.success("System Reset Completed!")
         st.rerun()
 
 # =========================================================
-# 4. Dashboard (පින්තූරවල තිබූ විදියටම)
+# 4. Dashboard Implementation
 # =========================================================
 if menu == "📊 Dashboard":
     df = st.session_state.db
@@ -83,17 +88,17 @@ if menu == "📊 Dashboard":
     
     if not df.empty:
         fig = px.bar(df, x="Date", y="Total", color="Status", title="Daily Sales Status", template="plotly_dark")
+        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("පද්ධතියට තවම දත්ත ඇතුළත් කර නැත.")
+        st.info("පද්ධතියට තවම දත්ත ඇතුළත් කර නැත. කරුණාකර 'Add/Manage Leads' වෙත යන්න.")
 
 # =========================================================
-# 5. Lead Entry (ඔබ එවූ පින්තූරවල තිබූ විදියටම)
+# 5. Lead Entry (පින්තූරවල තිබූ විදියටම)
 # =========================================================
 elif menu == "📝 Add/Manage Leads":
     st.subheader("📝 Lead & Order Management")
     
-    # ඇණවුමක් ඇතුළත් කරන Form එක
     with st.expander("➕ Click to Add New Lead", expanded=True):
         with st.form("lead_form", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
@@ -120,6 +125,8 @@ elif menu == "📝 Add/Manage Leads":
                     st.session_state.db.to_csv("leads.csv", index=False)
                     st.success("Lead Saved Successfully!")
                     st.rerun()
+                else:
+                    st.error("නම සහ දුරකථන අංකය අනිවාර්ය වේ!")
 
     st.markdown("### 📋 Lead Data Table")
     st.dataframe(st.session_state.db, use_container_width=True)
