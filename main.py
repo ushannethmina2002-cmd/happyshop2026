@@ -1,4 +1,185 @@
-electbox("Courier Company", ["Koombiyo", "Domex", "Pronto", "Royal Express"])
+import streamlit as st
+import pandas as pd
+from datetime import datetime, date, timedelta
+import uuid
+import os
+import plotly.express as px
+import plotly.graph_objects as go
+
+# --- 0. DATA PERSISTENCE (දත්ත ස්ථීරව තබා ගැනීම) ---
+def save_data(df, filename):
+    df.to_csv(filename, index=False)
+
+def load_data(filename):
+    if os.path.exists(filename):
+        return pd.read_csv(filename).to_dict('records')
+    return []
+
+def format_currency(num):
+    if num >= 1_000_000_000: return f"{num / 1_000_000_000:.1f}B"
+    elif num >= 1_000_000: return f"{num / 1_000_000:.1f}M"
+    elif num >= 1_000: return f"{num / 1_000:.1f}K"
+    return f"{num:,.2f}"
+
+# --- SRI LANKA GEO-DATA (ලංකාවේ දත්ත) ---
+SL_DATA = {
+    "Colombo": ["Colombo 1-15", "Dehiwala", "Mount Lavinia", "Nugegoda", "Maharagama", "Kottawa", "Malabe", "Battaramulla"],
+    "Gampaha": ["Gampaha", "Negombo", "Kadawatha", "Kiribathgoda", "Wattala", "Ja-Ela", "Veyangoda"],
+    "Kalutara": ["Kalutara", "Panadura", "Horana", "Beruwala", "Matugama"],
+    "Kandy": ["Kandy", "Peradeniya", "Katugastota", "Gampola", "Nawalapitiya"],
+    "Matale": ["Matale", "Dambulla", "Sigiriya"],
+    "Nuwara Eliya": ["Nuwara Eliya", "Hatton", "Talawakele"],
+    "Galle": ["Galle", "Hikkaduwa", "Ambalangoda", "Karapitiya"],
+    "Matara": ["Matara", "Akuressa", "Weligama"],
+    "Hambantota": ["Hambantota", "Tangalle", "Beliatta"],
+    "Jaffna": ["Jaffna", "Chavakachcheri"],
+    "Mannar": ["Mannar"], "Vavuniya": ["Vavuniya"], "Mullaitivu": ["Mullaitivu"], "Kilinochchi": ["Kilinochchi"],
+    "Batticaloa": ["Batticaloa"], "Ampara": ["Ampara", "Kalmunai"], "Trincomalee": ["Trincomalee"],
+    "Kurunegala": ["Kurunegala", "Kuliyapitiya", "Narammala", "Pannala"],
+    "Puttalam": ["Puttalam", "Chilaw", "Marawila"],
+    "Anuradhapura": ["Anuradhapura", "Eppawala", "Kekirawa"], "Polonnaruwa": ["Polonnaruwa"],
+    "Badulla": ["Badulla", "Bandarawela", "Hali-Ela"], "Moneragala": ["Moneragala", "Wellawaya"],
+    "Ratnapura": ["Ratnapura", "Embilipitiya", "Balangoda"], "Kegalle": ["Kegalle", "Mawanella", "Warakapola"]
+}
+
+# --- 1. PAGE CONFIGURATION ---
+st.set_page_config(page_title="Happy Shop | Ultimate Enterprise ERP", layout="wide", initial_sidebar_state="expanded")
+
+# --- 2. SESSION STATE & DB INITIALIZATION ---
+if 'orders' not in st.session_state: st.session_state.orders = load_data('orders.csv')
+if 'stocks' not in st.session_state:
+    if os.path.exists('stocks.csv'):
+        df_s = pd.read_csv('stocks.csv')
+        st.session_state.stocks = dict(zip(df_s.Item, df_s.Qty))
+    else:
+        st.session_state.stocks = {"Kesharaja Hair Oil": 100, "Crown 1": 50, "Kalkaya": 75}
+if 'expenses' not in st.session_state: st.session_state.expenses = load_data('expenses.csv')
+if 'grn_history' not in st.session_state: st.session_state.grn_history = load_data('grn.csv')
+if 'authenticated' not in st.session_state: st.session_state.authenticated = False
+if 'current_user' not in st.session_state: st.session_state.current_user = None
+if 'user_role' not in st.session_state: st.session_state.user_role = None
+if 'staff_perms' not in st.session_state:
+    st.session_state.staff_perms = {"Add_Order": True, "Print": True, "Finance": False}
+
+# --- 3. LOGIN SYSTEM ---
+def check_login(u, p):
+    if (u == "admin" and p == "happy123") or (u == "happyshop@gmail.com" and p == "happy123"):
+        return True, "Owner", "Admin"
+    for i in range(1, 6):
+        if u == f"demo{i}@gmail.com" and p == f"demo{i}":
+            return True, "Staff", f"demo{i}"
+    return False, None, None
+
+if not st.session_state.authenticated:
+    st.markdown("<h2 style='text-align: center; color: #ffa500;'>HAPPY SHOP ENTERPRISE LOGIN</h2>", unsafe_allow_html=True)
+    with st.form("login_form"):
+        user_input = st.text_input("Username / Email")
+        pass_input = st.text_input("Password", type="password")
+        if st.form_submit_button("Login"):
+            auth, role, name = check_login(user_input, pass_input)
+            if auth:
+                st.session_state.authenticated = True
+                st.session_state.user_role = role
+                st.session_state.current_user = name
+                st.rerun()
+            else: st.error("Invalid credentials")
+    st.stop()
+
+# --- 4. CSS (Enhanced UI/UX) ---
+st.markdown("""
+    <style>
+    .stApp { background-color: #0d1117; color: #c9d1d9; }
+    [data-testid="stSidebar"] { background-color: #161b22 !important; }
+    .metric-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 25px; }
+    .m-card { padding: 15px; border-radius: 10px; text-align: center; min-width: 130px; color: white; font-weight: bold; }
+    .bg-p { background: #6c757d; } .bg-c { background: #28a745; } .bg-n { background: #ffc107; color: black; } 
+    .bg-x { background: #dc3545; } .bg-f { background: #343a40; } .bg-t { background: #007bff; } .bg-profit { background: #9b59b6; }
+    .val { font-size: 26px; display: block; }
+    .ship-header { background-color: #1f2937; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #374151; }
+    .status-tab { padding: 5px 12px; border-radius: 5px; font-weight: bold; font-size: 11px; margin-right: 5px; color: white; display: inline-block;}
+    @media print {
+        .no-print { display: none !important; }
+        .print-area { visibility: visible !important; color: black !important; background: white !important; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 5. SIDEBAR ---
+with st.sidebar:
+    st.markdown(f"<h1 style='color:#ffa500; text-align:center;'>HAPPY SHOP</h1>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:center;'>👤 <b>{st.session_state.current_user}</b></p>", unsafe_allow_html=True)
+    
+    if st.session_state.user_role == "Owner":
+        with st.expander("🛠️ Admin Master Control", expanded=False):
+            st.session_state.staff_perms["Add_Order"] = st.checkbox("Allow Staff: Add Leads", value=st.session_state.staff_perms["Add_Order"])
+            st.session_state.staff_perms["Print"] = st.checkbox("Allow Staff: Print/Dispatch", value=st.session_state.staff_perms["Print"])
+            staff_list = ["Admin", "demo1", "demo2", "demo3", "demo4", "demo5"]
+            selected_ghost = st.selectbox("Ghost Switch User", staff_list, index=staff_list.index(st.session_state.current_user) if st.session_state.current_user in staff_list else 0)
+            if selected_ghost != st.session_state.current_user:
+                st.session_state.current_user = selected_ghost
+                st.rerun()
+
+    menu = st.radio("MAIN NAVIGATION", ["🏠 Dashboard", "🧾 Orders", "🚚 Shipped Items", "📦 GRN", "💰 Expense", "🔄 Return", "📊 Stocks", "🛍️ Products"])
+    
+    sub = ""
+    if menu == "🧾 Orders": 
+        sub = st.selectbox("Order Menu", ["New Order", "Pending Orders", "Order Search", "Import Lead", "View Lead", "Add Lead", "Order History", "Exchanging Orders", "Blacklist Manager"])
+    elif menu == "🚚 Shipped Items": 
+        sub = st.selectbox("Shipping Menu", ["Ship", "Shipped List", "Shipped Summary", "Delivery Summary", "Confirm Dispatch", "Print Dispatch Items", "Search Waybills"])
+    elif menu == "📦 GRN": sub = st.selectbox("GRN Menu", ["New GRN", "GRN List"])
+    elif menu == "📊 Stocks": sub = st.selectbox("Stock Menu", ["View Stocks", "Adjustment"])
+
+# --- 6. DASHBOARD MODULE ---
+if menu == "🏠 Dashboard":
+    st.title("🚀 Business Control Center")
+    df_o = pd.DataFrame(st.session_state.orders)
+    df_e = pd.DataFrame(st.session_state.expenses)
+    
+    # Logic for metrics
+    def get_count(s): return len(df_o[df_o['status'] == s]) if not df_o.empty else 0
+    total_rev = df_o[df_o['status'] == 'shipped']['total'].astype(float).sum() if not df_o.empty else 0
+    total_exp = df_e['amount'].astype(float).sum() if not df_e.empty else 0
+    net_profit = total_rev - total_exp
+
+    st.markdown(f"""
+        <div class="metric-container">
+            <div class="m-card bg-p">PENDING<span class="val">{get_count('pending')}</span></div>
+            <div class="m-card bg-c">CONFIRMED<span class="val">{get_count('confirm')}</span></div>
+            <div class="m-card bg-n">NO ANSWER<span class="val">{get_count('noanswer')}</span></div>
+            <div class="m-card bg-x">CANCEL<span class="val">{get_count('cancel')}</span></div>
+            <div class="m-card bg-t">TOTAL LEADS<span class="val">{len(df_o)}</span></div>
+            <div class="m-card bg-profit">PROFIT<span class="val">Rs.{format_currency(net_profit)}</span></div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if not df_o.empty:
+            st.plotly_chart(px.pie(df_o, names='dist', title="Sales by District", hole=0.4), use_container_width=True)
+    with c2:
+        if not df_o.empty:
+            st.plotly_chart(px.bar(df_o, x='status', color='status', title="Order Status Distribution"), use_container_width=True)
+
+# --- 7. ORDERS MODULE (ADVANCED VIEW) ---
+elif menu == "🧾 Orders":
+    if sub in ["New Order", "Add Lead"]:
+        if st.session_state.user_role == "Owner" or st.session_state.staff_perms["Add_Order"]:
+            st.subheader(f"📝 Happy Shop - {sub}")
+            with st.form("full_order", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                with c1:
+                    name = st.text_input("Customer Name *")
+                    phone = st.text_input("Contact Number 1 *")
+                    addr = st.text_area("Address *")
+                    dist = st.selectbox("District", list(SL_DATA.keys()))
+                    city = st.selectbox("City", SL_DATA[dist])
+                with c2:
+                    prod = st.selectbox("Product", list(st.session_state.stocks.keys()))
+                    qty = st.number_input("Qty", min_value=1, value=1)
+                    price = st.number_input("Sale Amount", value=2950.0)
+                    delivery = st.number_input("Delivery Charge", value=350.0)
+                    discount = st.number_input("Discount", value=0.0)
+                    courier = st.selectbox("Courier Company", ["Koombiyo", "Domex", "Pronto", "Royal Express"])
                 
                 if st.form_submit_button("🚀 SAVE ENTRY"):
                     oid = f"HS-{uuid.uuid4().hex[:6].upper()}"
