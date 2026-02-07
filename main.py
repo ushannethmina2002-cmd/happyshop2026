@@ -18,11 +18,13 @@ st.set_page_config(
 # --- 2. CSS & UI STYLING ---
 st.markdown("""
     <style>
-    /* Hide Streamlit elements */
+    /* Hide Streamlit elements - Added to remove Footer and Logo */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stDeployButton {display:none;}
+    div[data-testid="stStatusWidget"] {visibility: hidden;}
+    .stAppDeployButton {display: none;}
     
     /* Global Styles */
     .stApp { background-color: #0d1117; color: #c9d1d9; }
