@@ -1,155 +1,194 @@
 import streamlit as st
 import pandas as pd
-import os
-import uuid
+import sqlite3
+import hashlib
 from datetime import datetime
+import plotly.express as px
 
 # ==========================================
-# 1. පද්ධති සැකසුම් (Professional Sidebar UI)
+# 1. පද්ධති සැකසුම් & Database Connection
 # ==========================================
 st.set_page_config(page_title="HappyShop Ultimate ERP", layout="wide")
 
+# Database එක සාදා ගැනීම (ඔබේ SQL ව්‍යුහය මෙහි ඇත)
+conn = sqlite3.connect('shop_system.db', check_same_thread=False)
+c = conn.cursor()
+
+def init_db():
+    # Users Table
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT, password TEXT, role TEXT)''')
+    # Products Table
+    c.execute('''CREATE TABLE IF NOT EXISTS products
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, code TEXT, description TEXT, 
+                  min_price REAL, max_price REAL, stock INTEGER, image TEXT)''')
+    # Orders Table
+    c.execute('''CREATE TABLE IF NOT EXISTS orders
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, status TEXT, 
+                  amount REAL, district TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    conn.commit()
+
+init_db()
+
+# Password Hashing සඳහා සරල ශ්‍රිතයක්
+def make_hashes(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+def check_hashes(password, hashed_text):
+    if make_hashes(password) == hashed_text:
+        return hashed_text
+    return False
+
+# ==========================================
+# 2. UI Styling
+# ==========================================
 st.markdown("""
 <style>
-    .stApp { background-color: #f8f9fa; color: #333; }
-    /* සයිඩ්බාර් එකේ පෙනුම ඔයාගේ CSS එකට අනුව */
-    [data-testid="stSidebar"] {
-        background-color: #ffffff !important;
-        border-right: 1px solid #ddd;
-    }
-    .nav-item {
-        display: block; padding: 10px 15px;
-        text-decoration: none; color: #333;
-        font-size: 14px; border-radius: 5px;
-        margin-bottom: 2px;
-    }
-    .nav-item:hover { background-color: #f2f2f2; }
-    .main-content { margin-left: 20px; padding: 20px; }
-    .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .main { background-color: #f5f7f9; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #007bff; color: white; }
+    .reportview-container .main .block-container { padding-top: 2rem; }
+    .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. Database Logic (Menus, Products, Orders)
+# 3. Authentication Logic (Login/Register)
 # ==========================================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user_info = None
 
-# මෙනු දත්ත ගබඩාව (ඔයා එවපු INSERT INTO ටික)
-if "menus" not in st.session_state:
-    initial_menus = [
-        {'id': 1, 'title': 'Dashboard', 'link': 'Dashboard', 'icon': '📊'},
-        {'id': 2, 'title': 'New Order', 'link': 'New Order', 'icon': '📝'},
-        {'id': 3, 'title': 'Stock', 'link': 'Stock', 'icon': '📦'},
-        {'id': 4, 'title': 'WhatsApp', 'link': 'WhatsApp', 'icon': '💬'},
-        {'id': 5, 'title': 'Profit', 'link': 'Profit', 'icon': '💰'},
-        {'id': 6, 'title': 'Menu Manager', 'link': 'Menu Manager', 'icon': '⚙️'}
-    ]
-    # මෙහි ඔයා එවපු අනෙක් මෙනු 40ම පද්ධතියට ඇතුළත් කළ හැක.
-    st.session_state.menus = pd.DataFrame(initial_menus)
-
-# නිෂ්පාදන දත්ත (SQL INSERT INTO ටික)
-if "products" not in st.session_state:
-    st.session_state.products = pd.DataFrame([
-        {'id': 1, 'name': 'Kesharaja Hair Oil', 'code': 'VGLS0005', 'price': 2950, 'stock': 228},
-        {'id': 2, 'name': 'Herbal Crown', 'code': 'VGLS0001', 'price': 1800, 'stock': 53},
-        {'id': 3, 'name': 'Medahani Kalkaya', 'code': 'VGLS0003', 'price': 1200, 'stock': 597},
-        {'id': 4, 'name': 'Maas Go Capsules', 'code': 'VGLS0006', 'price': 2500, 'stock': 90}
-    ])
-
-if "orders" not in st.session_state:
-    st.session_state.orders = pd.DataFrame(columns=["id", "customer", "total", "payment", "date"])
-
-# ==========================================
-# 3. Dynamic Sidebar (ඔයා එවපු PHP Logic එක)
-# ==========================================
-with st.sidebar:
-    st.markdown("### 🛒 ORDER SYSTEM")
-    st.divider()
-    
-    # මෙනු ලැයිස්තුව පෙන්වීම
-    selection = "Dashboard" # Default
-    for index, row in st.session_state.menus.iterrows():
-        if st.button(f"{row['icon']} {row['title']}", key=f"menu_{row['id']}", use_container_width=True):
-            st.session_state.current_page = row['link']
-    
-    if "current_page" not in st.session_state:
-        st.session_state.current_page = "Dashboard"
-
-# ==========================================
-# 4. පද්ධතියේ පිටු (Pages)
-# ==========================================
-page = st.session_state.current_page
-
-# --- MENU MANAGER (ඔයාගේ PHP CRUD Logic එක) ---
-if page == "Menu Manager":
-    st.title("⚙️ Menu Manager")
-    
-    # Add Menu Form
-    with st.expander("➕ Add New Menu Item"):
-        with st.form("add_menu"):
-            m_title = st.text_input("Title")
-            m_link = st.text_input("Link Name")
-            m_icon = st.text_input("Icon (Emoji)")
-            if st.form_submit_button("Add Menu"):
-                new_id = st.session_state.menus['id'].max() + 1
-                new_row = {'id': new_id, 'title': m_title, 'link': m_link, 'icon': m_icon}
-                st.session_state.menus = pd.concat([st.session_state.menus, pd.DataFrame([new_row])], ignore_index=True)
-                st.rerun()
-
-    # Menu Table & Delete
-    st.table(st.session_state.menus)
-    del_id = st.number_input("Enter Menu ID to Delete", min_value=1, step=1)
-    if st.button("Delete Menu"):
-        st.session_state.menus = st.session_state.menus[st.session_state.menus['id'] != del_id]
-        st.rerun()
-
-# --- DASHBOARD ---
-elif page == "Dashboard":
-    st.title("📊 Business Dashboard")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Orders", len(st.session_state.orders))
-    col2.metric("Total Revenue", f"Rs. {st.session_state.orders['total'].sum():,.2f}")
-    col3.metric("Low Stock Items", len(st.session_state.products[st.session_state.products['stock'] < 100]))
-    
-    st.divider()
-    st.subheader("Recent Orders")
-    st.dataframe(st.session_state.orders, use_container_width=True)
-
-# --- NEW ORDER ---
-elif page == "New Order":
-    st.title("📝 Create New Order")
-    with st.form("order_form"):
-        c_name = st.text_input("Customer Name")
-        c_contact = st.text_input("Contact")
-        c_city = st.text_input("City")
-        c_pay = st.selectbox("Payment Method", ["COD", "Card"])
+if not st.session_state.logged_in:
+    cols = st.columns([1, 2, 1])
+    with cols[1]:
+        tab1, tab2 = st.tabs(["🔑 Login", "📝 Register"])
         
-        # Multi-product Selection
-        selected_p = st.multiselect("Select Products", st.session_state.products['name'])
-        
-        if st.form_submit_button("Save Order"):
-            total_price = 0
-            for p_name in selected_p:
-                price = st.session_state.products.loc[st.session_state.products['name'] == p_name, 'price'].values[0]
-                total_price += price
-                # Stock Update
-                st.session_state.products.loc[st.session_state.products['name'] == p_name, 'stock'] -= 1
-            
-            new_order = {
-                "id": len(st.session_state.orders) + 1,
-                "customer": c_name,
-                "total": total_price,
-                "payment": c_pay,
-                "date": datetime.now().strftime("%Y-%m-%d")
-            }
-            st.session_state.orders = pd.concat([st.session_state.orders, pd.DataFrame([new_order])], ignore_index=True)
-            st.success("Order Created Successfully!")
+        with tab1:
+            st.subheader("Login to Shop System")
+            email = st.text_input("Email", key="login_email")
+            password = st.text_input("Password", type='password', key="login_pass")
+            if st.button("Login"):
+                hashed_pswd = make_hashes(password)
+                c.execute('SELECT * FROM users WHERE email = ? AND password = ?', (email, hashed_pswd))
+                data = c.fetchone()
+                if data:
+                    st.session_state.logged_in = True
+                    st.session_state.user_info = data
+                    st.success(f"Welcome back {data[1]}!")
+                    st.rerun()
+                else:
+                    st.error("Invalid Email or Password")
 
-# --- STOCK ---
-elif page == "Stock":
-    st.title("📦 Stock Inventory")
-    st.dataframe(st.session_state.products, use_container_width=True)
+        with tab2:
+            st.subheader("Create New Account")
+            new_user = st.text_input("Name")
+            new_email = st.text_input("Email")
+            new_password = st.text_input("Password", type='password')
+            if st.button("Sign Up"):
+                c.execute('INSERT INTO users(name, email, password, role) VALUES (?,?,?,?)', 
+                          (new_user, new_email, make_hashes(new_password), "user"))
+                conn.commit()
+                st.success("Account created! Please Login.")
 
-# --- අනෙකුත් පිටු (Placeholders) ---
+# ==========================================
+# 4. Main Application (Logged In)
+# ==========================================
 else:
-    st.title(f"{page}")
-    st.info(f"This is the {page} module. You can add specific logic here.")
+    # Sidebar Navigation
+    with st.sidebar:
+        st.title(f"👋 {st.session_state.user_info[1]}")
+        st.write(f"Role: {st.session_state.user_info[4]}")
+        st.divider()
+        
+        menu = ["📊 Dashboard", "📦 Products", "📝 New Order", "⚙️ Menu Manager", "🚪 Logout"]
+        choice = st.radio("MAIN MENU", menu)
+        
+        if choice == "🚪 Logout":
+            st.session_state.logged_in = False
+            st.rerun()
+
+    # --- DASHBOARD (Chart.js logic converted to Plotly) ---
+    if choice == "📊 Dashboard":
+        st.title("Business Analytics")
+        
+        # SQL Query for totals (ඔබේ Node.js එකේ තිබූ query එක)
+        c.execute('''SELECT COUNT(*) as total, SUM(amount) as revenue, 
+                     SUM(CASE WHEN status='confirmed' THEN 1 ELSE 0 END) as confirmed 
+                     FROM orders''')
+        stats = c.fetchone()
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Orders", stats[0] if stats[0] else 0)
+        col2.metric("Total Revenue", f"LKR {stats[1]:,.2f}" if stats[1] else "LKR 0.00")
+        col3.metric("Confirmed Orders", stats[2] if stats[2] else 0)
+
+        # Visual Chart
+        if stats[0] and stats[0] > 0:
+            df_chart = pd.DataFrame({
+                'Status': ['Total Orders', 'Confirmed'],
+                'Count': [stats[0], stats[2]]
+            })
+            fig = px.bar(df_chart, x='Status', y='Count', color='Status', title="Order Summary")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No data available for charts yet.")
+
+    # --- PRODUCTS (Add & View) ---
+    elif choice == "📦 Products":
+        st.title("Product Management")
+        
+        with st.expander("➕ Add New Product"):
+            with st.form("prod_form"):
+                p_name = st.text_input("Product Name")
+                p_code = st.text_input("Product Code")
+                p_desc = st.text_area("Description")
+                p_min = st.number_input("Min Price", min_value=0.0)
+                p_max = st.number_input("Max Price", min_value=0.0)
+                p_stock = st.number_input("Initial Stock", min_value=0)
+                if st.form_submit_button("Save Product"):
+                    c.execute('''INSERT INTO products(name, code, description, min_price, max_price, stock) 
+                                 VALUES (?,?,?,?,?,?)''', (p_name, p_code, p_desc, p_min, p_max, p_stock))
+                    conn.commit()
+                    st.success("Product added successfully!")
+
+        st.subheader("Current Stock")
+        products_df = pd.read_sql_query("SELECT id, name, code, max_price as Price, stock FROM products", conn)
+        st.dataframe(products_df, use_container_width=True)
+
+    # --- NEW ORDER ---
+    elif choice == "📝 New Order":
+        st.title("Create New Order")
+        
+        # පද්ධතියේ ඇති නිෂ්පාදන ලැයිස්තුව ලබා ගැනීම
+        products = pd.read_sql_query("SELECT id, name, max_price FROM products WHERE stock > 0", conn)
+        
+        if not products.empty:
+            with st.form("order_form"):
+                selected_prod_name = st.selectbox("Select Product", products['name'])
+                district = st.selectbox("District", ["Colombo", "Gampaha", "Kandy", "Galle", "Other"])
+                qty = st.number_input("Quantity", min_value=1, value=1)
+                status = st.selectbox("Status", ["pending", "confirmed"])
+                
+                # මිල ගණනය කිරීම
+                price = products[products['name'] == selected_prod_name]['max_price'].values[0]
+                total_amount = price * qty
+                
+                st.info(f"Total Amount: LKR {total_amount:,.2f}")
+                
+                if st.form_submit_button("Place Order"):
+                    # Insert Order
+                    c.execute('''INSERT INTO orders(user_id, status, amount, district) 
+                                 VALUES (?,?,?,?)''', (st.session_state.user_info[0], status, total_amount, district))
+                    # Update Stock
+                    c.execute('UPDATE products SET stock = stock - ? WHERE name = ?', (qty, selected_prod_name))
+                    conn.commit()
+                    st.success("Order placed successfully!")
+        else:
+            st.warning("No products in stock.")
+
+    # --- MENU MANAGER ---
+    elif choice == "⚙️ Menu Manager":
+        st.title("System Menu Manager")
+        st.info("මෙමගින් පද්ධතියේ මෙනු අයිතම පාලනය කළ හැක (Admin Only)")
+        # මෙහිදී ඔබට මෙනු Table එකක් සාදා තවදුරටත් Edit කළ හැක.
+        st.write("Current User ID:", st.session_state.user_info[0])
